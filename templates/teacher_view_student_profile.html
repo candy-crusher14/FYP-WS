@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Profile - {{ student.full_name }} - Smart Classroom</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary-blue: #3498db;
+            --primary-green: #2ecc71;
+            --primary-purple: #9b59b6;
+            --light-gray: #f5f7fa;
+            --medium-gray: #e0e7ee;
+            --dark-gray: #34495e;
+            --text-dark: #2c3e50;
+            --text-light: #7f8c8d;
+            --success: #2ecc71;
+            --warning: #f39c12;
+            --danger: #e74c3c;
+            --shadow-sm: 0 4px 6px rgba(0, 0, 0, 0.1);
+            --shadow-md: 0 8px 15px rgba(0, 0, 0, 0.1);
+            --shadow-lg: 0 15px 30px rgba(0, 0, 0, 0.1);
+            --transition: all 0.3s ease;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: var(--light-gray);
+            color: var(--text-dark);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: linear-gradient(135deg, var(--primary-blue), var(--primary-green));
+            color: white;
+            padding: 2rem;
+            border-radius: 15px;
+            box-shadow: var(--shadow-lg);
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .nav-bar {
+            background: white;
+            padding: 1rem 2rem;
+            border-radius: 10px;
+            box-shadow: var(--shadow-sm);
+            margin-bottom: 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .nav-links a {
+            color: var(--text-dark);
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            border-radius: 5px;
+            transition: var(--transition);
+        }
+
+        .nav-links a:hover, .nav-links a.active {
+            background-color: var(--primary-blue);
+            color: white;
+        }
+
+        .profile-grid {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .profile-card {
+            background: white;
+            padding: 2rem;
+            border-radius: 15px;
+            box-shadow: var(--shadow-sm);
+            text-align: center;
+        }
+
+        .profile-avatar {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary-green), var(--primary-blue));
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3rem;
+            font-weight: 700;
+            margin: 0 auto 1rem;
+        }
+
+        .profile-info h2 {
+            font-size: 1.8rem;
+            margin-bottom: 0.5rem;
+            color: var(--text-dark);
+        }
+
+        .profile-info p {
+            color: var(--text-light);
+            margin-bottom: 0.5rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 10px;
+            box-shadow: var(--shadow-sm);
+            text-align: center;
+            transition: var(--transition);
+        }
+
+        .stat-card:hover {
+            transform: translateY(-3px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--primary-blue);
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-label {
+            color: var(--text-light);
+            font-size: 0.9rem;
+        }
+
+        .submissions-section {
+            background: white;
+            padding: 2rem;
+            border-radius: 15px;
+            box-shadow: var(--shadow-sm);
+            margin-top: 2rem;
+        }
+
+        .submission-item {
+            border: 1px solid var(--medium-gray);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            transition: var(--transition);
+        }
+
+        .submission-item:hover {
+            box-shadow: var(--shadow-sm);
+        }
+
+        .submission-header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .assignment-title {
+            font-weight: 600;
+            color: var(--text-dark);
+        }
+
+        .score-badge {
+            background: var(--primary-green);
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 0.75rem 1.5rem;
+            background-color: var(--primary-blue);
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: var(--transition);
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .btn:hover {
+            background-color: #2980b9;
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background-color: var(--medium-gray);
+            color: var(--text-dark);
+        }
+
+        .btn-secondary:hover {
+            background-color: var(--dark-gray);
+            color: white;
+        }
+
+        .classroom-list {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 10px;
+            box-shadow: var(--shadow-sm);
+            margin-top: 1rem;
+        }
+
+        .classroom-item {
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--medium-gray);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .classroom-item:last-child {
+            border-bottom: none;
+        }
+
+        @media (max-width: 768px) {
+            .profile-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .nav-bar {
+                flex-direction: column;
+                gap: 1rem;
+            }
+            
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1><i class="fas fa-user-graduate"></i> Student Profile</h1>
+            <p>Viewing {{ student.full_name }}'s academic profile and performance</p>
+        </div>
+
+        <div class="nav-bar">
+            <div class="nav-links">
+                <a href="{{ url_for('teacher_dashboard') }}"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
+                <a href="#" class="active"><i class="fas fa-user-graduate"></i> Student Profile</a>
+            </div>
+            <div>
+                <a href="{{ url_for('teacher_dashboard') }}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Back to Dashboard
+                </a>
+            </div>
+        </div>
+
+        <div class="profile-grid">
+            <div class="profile-card">
+                <div class="profile-avatar">
+                    {{ (student.full_name[0] if student.full_name else 'S')|upper }}
+                </div>
+                <div class="profile-info">
+                    <h2>{{ student.full_name or 'Student' }}</h2>
+                    <p><i class="fas fa-envelope"></i> {{ student.email or 'No email provided' }}</p>
+                    <p><i class="fas fa-id-card"></i> {{ student.roll_number or 'No roll number' }}</p>
+                    <p><i class="fas fa-university"></i> {{ student.university or 'No university' }}</p>
+                    <p><i class="fas fa-graduation-cap"></i> {{ student.department }} - Year {{ student.year }}</p>
+                    <p><i class="fas fa-calendar"></i> Joined {{ student.created_at.strftime('%B %Y') if student.created_at else 'Unknown' }}</p>
+                </div>
+
+                <div class="classroom-list">
+                    <h4 style="margin-bottom: 1rem; color: var(--text-dark);">Enrolled in Your Classes</h4>
+                    {% for classroom in enrolled_classrooms %}
+                    <div class="classroom-item">
+                        <div>
+                            <strong>{{ classroom.name }}</strong>
+                            <div class="text-muted">{{ classroom.department }} - Year {{ classroom.year }}</div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div>
+                <h3 style="margin-bottom: 1rem; color: var(--text-dark);">Academic Performance (Your Assignments)</h3>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-number">{{ stats.total_submissions }}</div>
+                        <div class="stat-label">Total Submissions</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">{{ stats.evaluated_submissions }}</div>
+                        <div class="stat-label">Evaluated</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">{{ "%.1f"|format(stats.avg_percentage) }}%</div>
+                        <div class="stat-label">Average Score</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">{{ "%.1f"|format(stats.highest_score) }}%</div>
+                        <div class="stat-label">Highest Score</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">{{ "%.1f"|format(stats.total_points_earned) }}</div>
+                        <div class="stat-label">Points Earned</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">{{ "%.1f"|format(stats.total_points_possible) }}</div>
+                        <div class="stat-label">Total Points</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {% if all_submissions %}
+        <div class="submissions-section">
+            <h3 style="margin-bottom: 1.5rem; color: var(--text-dark);">Recent Submissions (Your Assignments)</h3>
+            {% for submission in all_submissions %}
+            <div class="submission-item">
+                <div class="submission-header">
+                    <div>
+                        <div class="assignment-title">{{ submission.assignment.title }}</div>
+                        <div class="text-muted">{{ submission.assignment.classroom.name }}</div>
+                    </div>
+                    <div class="score-badge">
+                        {{ "%.1f"|format(submission.display_score) }}/{{ "%.1f"|format(submission.assignment.max_score) }}
+                    </div>
+                </div>
+                <div class="text-muted">
+                    <i class="fas fa-calendar"></i> Submitted: {{ submission.submitted_at.strftime('%b %d, %Y %H:%M') }}
+                    {% if submission.evaluated_at %}
+                    | <i class="fas fa-check"></i> Evaluated: {{ submission.evaluated_at.strftime('%b %d, %Y %H:%M') }}
+                    {% endif %}
+                </div>
+                {% if submission.gemini_comment %}
+                <div style="margin-top: 0.5rem; padding: 0.5rem; background: var(--light-gray); border-radius: 5px;">
+                    <strong>Feedback:</strong> {{ submission.gemini_comment }}
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="submissions-section">
+            <div style="text-align: center; padding: 2rem; color: var(--text-light);">
+                <i class="fas fa-inbox" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+                <h3>No Submissions Found</h3>
+                <p>This student hasn't submitted any assignments for your classes yet.</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>

@@ -23,6 +23,7 @@ import random
 import io
 import uuid  # For invite codes
 from datetime import datetime, timedelta
+import html  # For HTML escaping
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -41,6 +42,16 @@ app.secret_key = os.environ.get('SECRET_KEY', 'default_secret_key_for_dev_123!@#
 
 # File upload configuration
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+
+# Security headers
+@app.after_request
+def add_security_headers(response):
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+    return response
+
 app.config['UPLOAD_FOLDER'] = 'uploads'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'pdf', 'doc', 'docx'}
 
@@ -50,7 +61,27 @@ for folder in ['uploads/profiles', 'uploads/documents']:
     os.makedirs(folder, exist_ok=True)
 
 def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+    if not filename or '.' not in filename:
+        return False
+    
+    # Check file extension
+    extension = filename.rsplit('.', 1)[1].lower()
+    if extension not in ALLOWED_EXTENSIONS:
+        return False
+    
+    # Additional security checks
+    # Prevent double extensions like .php.jpg
+    if filename.count('.') > 1:
+        # Allow only if the second-to-last part is not executable
+        parts = filename.split('.')
+        if len(parts) > 2 and parts[-2].lower() in {'php', 'jsp', 'asp', 'aspx', 'exe', 'bat', 'cmd', 'sh'}:
+            return False
+    
+    # Prevent null bytes and other dangerous characters
+    if '\x00' in filename or any(char in filename for char in ['<', '>', ':', '"', '|', '?', '*']):
+        return False
+    
+    return True
 
 # Removed the problematic session clearing block that was here
 print('changes')
@@ -286,6 +317,17 @@ def preprocess_text(text):
 
 def hash_password(password): return hashlib.sha256(password.encode()).hexdigest()
 
+def sanitize_input(text):
+    """Sanitize user input to prevent XSS attacks"""
+    if not text:
+        return text
+    # HTML escape the input
+    sanitized = html.escape(str(text).strip())
+    # Remove any remaining script tags or javascript
+    sanitized = re.sub(r'<script[^>]*>.*?</script>', '', sanitized, flags=re.IGNORECASE | re.DOTALL)
+    sanitized = re.sub(r'javascript:', '', sanitized, flags=re.IGNORECASE)
+    return sanitized
+
 
 def evaluate_with_algorithm(expected, response_text, max_score=10.0):
     if not expected or not response_text:
@@ -419,12 +461,14 @@ def admin_dashboard():
         teachers = Teacher.query.filter_by(university=admin.university)
         pending_teachers = teachers.filter(Teacher.is_approved == False).order_by(Teacher.created_at.desc()).all()
         
-        # Get classrooms from teachers in this university
-        teacher_ids = [t.id for t in teachers.all()]
+        # Get classrooms from teachers in this university (optimized)
+        teacher_ids = teachers.with_entities(Teacher.id).all()
+        teacher_ids = [t.id for t in teacher_ids] if teacher_ids else []
         classrooms = Classroom.query.filter(Classroom.teacher_id.in_(teacher_ids)) if teacher_ids else Classroom.query.filter(False)
         
-        # Get assignments from classrooms in this university
-        classroom_ids = [c.id for c in classrooms.all()]
+        # Get assignments from classrooms in this university (optimized)
+        classroom_ids = classrooms.with_entities(Classroom.id).all()
+        classroom_ids = [c.id for c in classroom_ids] if classroom_ids else []
         assignments = Assignment.query.filter(Assignment.classroom_id.in_(classroom_ids)) if classroom_ids else Assignment.query.filter(False)
         
         stats = {
@@ -442,6 +486,31 @@ def admin_dashboard():
             'recent_assignments': Assignment.query.order_by(Assignment.created_at.desc()).limit(5).all()
         }
         pending_teachers = Teacher.query.filter(Teacher.is_approved == False).order_by(Teacher.created_at.desc()).all()
+        
+        # Add university breakdown for system admin
+        university_stats = []
+        universities = ['University of Mirpur Khas', 'University of Sindh']
+        for university in universities:
+            uni_students = Student.query.filter_by(university=university).count()
+            uni_teachers = Teacher.query.filter_by(university=university).count()
+            
+            # Get classrooms for this university's teachers (optimized)
+            uni_teacher_ids = Teacher.query.filter_by(university=university).with_entities(Teacher.id).all()
+            uni_teacher_ids = [t.id for t in uni_teacher_ids] if uni_teacher_ids else []
+            uni_classrooms = Classroom.query.filter(Classroom.teacher_id.in_(uni_teacher_ids)).count() if uni_teacher_ids else 0
+            
+            # Get assignments for this university
+            uni_assignments = Assignment.query.join(Classroom).join(Teacher).filter(Teacher.university == university).count()
+            
+            university_stats.append({
+                'name': university,
+                'students': uni_students,
+                'teachers': uni_teachers,
+                'classrooms': uni_classrooms,
+                'assignments': uni_assignments
+            })
+        
+        stats['university_breakdown'] = university_stats
     
     # Pass additional data for user management and analytics
     if admin.role == 'university_admin' and admin.university:
@@ -1339,11 +1408,19 @@ def student_profile_edit():
     
     if request.method == 'POST':
         # Handle profile image upload
-        if 'profile_image' in request.files:
-            file = request.files['profile_image']
-            if file and file.filename and allowed_file(file.filename):
+        file = request.files.get('profile_image')
+        if file and file.filename and allowed_file(file.filename):
+            # Additional file size check (Flask's MAX_CONTENT_LENGTH handles overall request size)
+            file.seek(0, 2)  # Seek to end
+            file_size = file.tell()
+            file.seek(0)  # Reset to beginning
+            
+            if file_size > 5 * 1024 * 1024:  # 5MB limit for profile images
+                flash('Profile image must be smaller than 5MB.', 'danger')
+            else:
                 filename = secure_filename(f"student_{student.id}_{file.filename}")
                 file_path = os.path.join('uploads/profiles', filename)
+                os.makedirs(os.path.dirname(file_path), exist_ok=True)
                 file.save(file_path)
                 student.profile_image = file_path
         
@@ -1377,6 +1454,114 @@ def student_profile_edit():
     return render_template('student_profile_edit.html', student=student)
 
 
+@app.route('/teacher/student/<int:student_id>/profile')
+def teacher_view_student_profile(student_id):
+    if not session.get('teacher_logged_in'):
+        flash('Please log in as a teacher.', 'warning')
+        return redirect(url_for('login', role='teacher'))
+    
+    teacher = Teacher.query.get_or_404(session['teacher_id'])
+    student = Student.query.get_or_404(student_id)
+    
+    # Check if teacher has access to this student (student is enrolled in teacher's classroom)
+    teacher_classroom_ids = [c.id for c in teacher.classrooms.all()]
+    student_enrollments = student.enrollments.filter(
+        Enrollment.classroom_id.in_(teacher_classroom_ids),
+        Enrollment.is_approved == True
+    ).all()
+    
+    if not student_enrollments:
+        flash('You do not have access to view this student\'s profile.', 'danger')
+        return redirect(url_for('teacher_dashboard'))
+    
+    # Get student statistics
+    total_submissions = student.submissions.filter(Submission.submitted_at != None).count()
+    evaluated_submissions = student.submissions.filter(Submission.evaluated_at != None).count()
+    pending_submissions = total_submissions - evaluated_submissions
+    
+    # Get all submissions with scores for this teacher's assignments
+    teacher_assignment_ids = [a.id for a in teacher.assignments.all()]
+    student_submissions_for_teacher = student.submissions.filter(
+        Submission.assignment_id.in_(teacher_assignment_ids),
+        Submission.submitted_at != None,
+        Submission.evaluated_at != None,
+        Submission.display_score != None
+    ).join(Assignment).order_by(Submission.evaluated_at.desc()).all()
+    
+    # Calculate statistics for teacher's assignments only
+    if student_submissions_for_teacher:
+        scores = [sub.display_score for sub in student_submissions_for_teacher]
+        max_scores = [sub.assignment.max_score for sub in student_submissions_for_teacher]
+        percentages = [(score/max_score)*100 for score, max_score in zip(scores, max_scores)]
+        
+        avg_percentage = sum(percentages) / len(percentages)
+        highest_score = max(percentages)
+        lowest_score = min(percentages)
+        total_points_earned = sum(scores)
+        total_points_possible = sum(max_scores)
+    else:
+        avg_percentage = 0
+        highest_score = 0
+        lowest_score = 0
+        total_points_earned = 0
+        total_points_possible = 0
+    
+    # Get enrolled classrooms count for this teacher
+    enrolled_classrooms_count = len(student_enrollments)
+    
+    stats = {
+        'total_submissions': total_submissions,
+        'evaluated_submissions': evaluated_submissions,
+        'pending_submissions': pending_submissions,
+        'avg_percentage': avg_percentage,
+        'highest_score': highest_score,
+        'lowest_score': lowest_score,
+        'total_points_earned': total_points_earned,
+        'total_points_possible': total_points_possible,
+        'enrolled_classrooms_count': enrolled_classrooms_count
+    }
+    
+    return render_template('teacher_view_student_profile.html', 
+                         student=student, 
+                         teacher=teacher,
+                         stats=stats, 
+                         all_submissions=student_submissions_for_teacher,
+                         enrolled_classrooms=[e.classroom for e in student_enrollments])
+
+
+@app.route('/teacher/profile')
+def teacher_profile():
+    if not session.get('teacher_logged_in'):
+        flash('Please log in as a teacher.', 'warning')
+        return redirect(url_for('login', role='teacher'))
+    
+    teacher = Teacher.query.get_or_404(session['teacher_id'])
+    
+    # Get comprehensive statistics
+    total_assignments = teacher.assignments.count()
+    total_classrooms = teacher.classrooms.count()
+    total_submissions = db.session.query(Submission).join(Assignment).filter(Assignment.teacher_id == teacher.id).count()
+    evaluated_submissions = db.session.query(Submission).join(Assignment).filter(
+        Assignment.teacher_id == teacher.id, 
+        Submission.evaluated_at != None
+    ).count()
+    pending_submissions = total_submissions - evaluated_submissions
+    
+    # Get enrollment statistics
+    total_enrollments = sum(c.enrollments_count for c in teacher.classrooms.all())
+    
+    stats = {
+        'total_assignments': total_assignments,
+        'total_classrooms': total_classrooms,
+        'total_submissions': total_submissions,
+        'evaluated_submissions': evaluated_submissions,
+        'pending_submissions': pending_submissions,
+        'total_enrollments': total_enrollments
+    }
+    
+    return render_template('teacher_profile.html', teacher=teacher, stats=stats)
+
+
 @app.route('/teacher/profile/edit', methods=['GET', 'POST'])
 def teacher_profile_edit():
     if not session.get('teacher_logged_in'):
@@ -1390,10 +1575,19 @@ def teacher_profile_edit():
         if 'profile_image' in request.files:
             file = request.files['profile_image']
             if file and file.filename and allowed_file(file.filename):
-                filename = secure_filename(f"teacher_{teacher.id}_{file.filename}")
-                file_path = os.path.join('uploads/profiles', filename)
-                file.save(file_path)
-                teacher.profile_image = file_path
+                # Additional file size check
+                file.seek(0, 2)  # Seek to end
+                file_size = file.tell()
+                file.seek(0)  # Reset to beginning
+                
+                if file_size > 5 * 1024 * 1024:  # 5MB limit for profile images
+                    flash('Profile image must be smaller than 5MB.', 'danger')
+                else:
+                    filename = secure_filename(f"teacher_{teacher.id}_{file.filename}")
+                    file_path = os.path.join('uploads/profiles', filename)
+                    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+                    file.save(file_path)
+                    teacher.profile_image = file_path
         
         # Handle document uploads
         for doc_type in ['id_card', 'verification_photo', 'certificate', 'other']:

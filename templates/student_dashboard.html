@@ -154,6 +154,74 @@
             align-items: center;
             justify-content: center;
             font-weight: 500;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .user-avatar:hover {
+            background-color: #27ae60;
+            transform: scale(1.05);
+        }
+
+        .user-menu {
+            position: relative;
+        }
+
+        .profile-dropdown {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            background: white;
+            border-radius: 8px;
+            box-shadow: var(--shadow-md);
+            min-width: 200px;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-10px);
+            transition: var(--transition);
+            z-index: 1000;
+            margin-top: 10px;
+        }
+
+        .profile-dropdown.show {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+
+        .dropdown-item {
+            display: block;
+            padding: 12px 16px;
+            color: var(--text-dark);
+            text-decoration: none;
+            transition: var(--transition);
+            border-bottom: 1px solid var(--medium-gray);
+        }
+
+        .dropdown-item:last-child {
+            border-bottom: none;
+        }
+
+        .dropdown-item:hover {
+            background-color: var(--light-gray);
+            color: var(--primary-green);
+        }
+
+        .dropdown-item i {
+            margin-right: 8px;
+            width: 16px;
+        }
+
+        .bg-success {
+            background-color: var(--primary-green) !important;
+        }
+
+        .bg-warning {
+            background-color: var(--warning) !important;
+        }
+
+        .bg-danger {
+            background-color: var(--danger) !important;
         }
 
         /* Main Layout */
@@ -800,7 +868,24 @@
                         <div class="user-name">{{ student.full_name if student else 'Student' }}</div>
                         <div class="user-role">Student</div>
                     </div>
-                    <div class="user-avatar">{{ (student.full_name[0] if student and student.full_name else 'S')|upper }}</div>
+                    <div class="user-avatar" onclick="toggleProfileDropdown()">{{ (student.full_name[0] if student and student.full_name else 'S')|upper }}</div>
+                    <div class="profile-dropdown" id="profileDropdown">
+                        <a href="{{ url_for('student_profile') }}" class="dropdown-item">
+                            <i class="fas fa-user"></i> View Profile
+                        </a>
+                        <a href="{{ url_for('student_profile_edit') }}" class="dropdown-item">
+                            <i class="fas fa-edit"></i> Edit Profile
+                        </a>
+                        <a href="{{ url_for('student_assignments_list') }}" class="dropdown-item">
+                            <i class="fas fa-tasks"></i> My Assignments
+                        </a>
+                        <a href="{{ url_for('student_report_pdf') }}" class="dropdown-item">
+                            <i class="fas fa-download"></i> Download Report
+                        </a>
+                        <a href="{{ url_for('student_logout') }}" class="dropdown-item">
+                            <i class="fas fa-sign-out-alt"></i> Logout
+                        </a>
+                    </div>
                 </div>
             </nav>
         </div>
@@ -935,165 +1020,131 @@
             <div id="classroom-view" class="tab-content active">
                 <div class="page-header">
                     <h1 class="page-title">My Classrooms</h1>
-                    <button class="btn btn-green">
+                    <a href="{{ url_for('student_join_classroom') }}" class="btn btn-green">
                         <i class="fas fa-plus"></i> Join New Class
-                    </button>
+                    </a>
                 </div>
 
+                {% if enrolled_classrooms %}
                 <div class="card-grid">
+                    {% for classroom in enrolled_classrooms %}
                     <div class="card">
                         <div class="card-header">
-                            <div class="card-title">CS101 - Intro to Programming</div>
-                            <div class="card-subtitle">Instructor: Prof. Sarah Johnson</div>
+                            <div class="card-title">{{ classroom.name }}</div>
+                            <div class="card-subtitle">Instructor: {{ classroom.teacher.full_name if classroom.teacher else 'Unknown' }}</div>
                         </div>
                         <div class="card-body">
-                            <p>Introduction to programming concepts using Python. Learn variables, loops, functions, and data structures.</p>
+                            <p>{{ classroom.description or 'No description available.' }}</p>
                             <div style="margin-top: 15px;">
                                 <div style="display: flex; gap: 15px; flex-wrap: wrap;">
                                     <div>
-                                        <div style="font-size: 0.9rem; color: var(--text-light);">Assignments</div>
-                                        <div style="font-weight: 700;">5/8</div>
+                                        <div style="font-size: 0.9rem; color: var(--text-light);">Department</div>
+                                        <div style="font-weight: 700;">{{ classroom.department }}</div>
                                     </div>
                                     <div>
-                                        <div style="font-size: 0.9rem; color: var(--text-light);">Avg. Grade</div>
-                                        <div style="font-weight: 700;">92%</div>
+                                        <div style="font-size: 0.9rem; color: var(--text-light);">Year</div>
+                                        <div style="font-weight: 700;">{{ classroom.year }}</div>
                                     </div>
+                                    {% if classroom.semester %}
                                     <div>
-                                        <div style="font-size: 0.9rem; color: var(--text-light);">Class Rank</div>
-                                        <div style="font-weight: 700;">4/45</div>
+                                        <div style="font-size: 0.9rem; color: var(--text-light);">Semester</div>
+                                        <div style="font-weight: 700;">{{ classroom.semester }}</div>
+                                    </div>
+                                    {% endif %}
+                                    <div>
+                                        <div style="font-size: 0.9rem; color: var(--text-light);">Students</div>
+                                        <div style="font-weight: 700;">{{ classroom.enrollments_count }}</div>
                                     </div>
                                 </div>
                             </div>
                         </div>
                         <div class="card-footer">
-                            <button class="btn btn-sm btn-green">View Assignments</button>
+                            <a href="{{ url_for('student_assignments_list') }}" class="btn btn-sm btn-green">View Assignments</a>
                         </div>
                     </div>
-
-                    <div class="card">
-                        <div class="card-header">
-                            <div class="card-title">CS205 - Web Development</div>
-                            <div class="card-subtitle">Instructor: Prof. Michael Brown</div>
-                        </div>
-                        <div class="card-body">
-                            <p>Building modern web applications with HTML, CSS, and JavaScript. Learn responsive design and interactivity.</p>
-                            <div style="margin-top: 15px;">
-                                <div style="display: flex; gap: 15px; flex-wrap: wrap;">
-                                    <div>
-                                        <div style="font-size: 0.9rem; color: var(--text-light);">Assignments</div>
-                                        <div style="font-weight: 700;">2/5</div>
-                                    </div>
-                                    <div>
-                                        <div style="font-size: 0.9rem; color: var(--text-light);">Avg. Grade</div>
-                                        <div style="font-weight: 700;">88%</div>
-                                    </div>
-                                    <div>
-                                        <div style="font-size: 0.9rem; color: var(--text-light);">Class Rank</div>
-                                        <div style="font-weight: 700;">7/42</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="card-footer">
-                            <button class="btn btn-sm btn-green">View Assignments</button>
-                        </div>
-                    </div>
-
-                    <div class="card">
-                        <div class="card-header">
-                            <div class="card-title">CS301 - Algorithms</div>
-                            <div class="card-subtitle">Instructor: Prof. James Wilson</div>
-                        </div>
-                        <div class="card-body">
-                            <p>Study of fundamental algorithms and their complexity. Sorting, searching, graph algorithms, and optimization.</p>
-                            <div style="margin-top: 15px;">
-                                <div style="display: flex; gap: 15px; flex-wrap: wrap;">
-                                    <div>
-                                        <div style="font-size: 0.9rem; color: var(--text-light);">Assignments</div>
-                                        <div style="font-weight: 700;">1/6</div>
-                                    </div>
-                                    <div>
-                                        <div style="font-size: 0.9rem; color: var(--text-light);">Avg. Grade</div>
-                                        <div style="font-weight: 700;">85%</div>
-                                    </div>
-                                    <div>
-                                        <div style="font-size: 0.9rem; color: var(--text-light);">Class Rank</div>
-                                        <div style="font-weight: 700;">12/38</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="card-footer">
-                            <button class="btn btn-sm btn-green">View Assignments</button>
-                        </div>
-                    </div>
+                    {% endfor %}
                 </div>
+                {% else %}
+                <div style="text-align: center; padding: 3rem; color: var(--text-light);">
+                    <i class="fas fa-chalkboard" style="font-size: 4rem; margin-bottom: 1rem; opacity: 0.3;"></i>
+                    <h3>No Classrooms Yet</h3>
+                    <p>You haven't joined any classrooms yet. Click "Join New Class" to get started!</p>
+                    <a href="{{ url_for('student_join_classroom') }}" class="btn btn-green" style="margin-top: 1rem;">
+                        <i class="fas fa-plus"></i> Join Your First Class
+                    </a>
+                </div>
+                {% endif %}
             </div>
 
             <!-- Assignment Submitter -->
             <div id="assignment-submitter" class="tab-content">
                 <div class="page-header">
                     <h1 class="page-title">Submit Assignment</h1>
-                    <button class="btn btn-green">
+                    <a href="{{ url_for('student_assignments_list') }}" class="btn btn-green">
                         <i class="fas fa-history"></i> Submission History
-                    </button>
+                    </a>
                 </div>
 
+                {% if available_assignments %}
                 <div class="form-section">
-                    <h2 class="form-title">Assignment Details</h2>
-                    <div class="form-grid">
-                        <div class="form-group">
-                            <label for="assignment-select">Select Assignment</label>
-                            <select id="assignment-select" class="form-control">
-                                <option value="">Choose an assignment</option>
-                                <option value="ds-project">Data Structures Final Project</option>
-                                <option value="web-assignment">Web Development Assignment</option>
-                                <option value="algo-pset">Algorithms Problem Set 3</option>
-                            </select>
+                    <h2 class="form-title">Available Assignments</h2>
+                    <div class="card-grid">
+                        {% for assignment in available_assignments %}
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="card-title">{{ assignment.title }}</div>
+                                <div class="card-subtitle">{{ assignment.classroom.name }} - {{ assignment.classroom.teacher.full_name }}</div>
+                            </div>
+                            <div class="card-body">
+                                <div class="assignment-info">
+                                    <div style="margin-bottom: 10px;">
+                                        <strong>Due Date:</strong> 
+                                        <span>
+                                            {{ assignment.submission_deadline.strftime('%B %d, %Y at %H:%M') }}
+                                        </span>
+                                    </div>
+                                    <div style="margin-bottom: 10px;">
+                                        <strong>Max Score:</strong> {{ assignment.max_score }} points
+                                    </div>
+                                    <div style="margin-bottom: 15px;">
+                                        <strong>Instructions:</strong>
+                                        <div style="background-color: var(--light-gray); padding: 10px; border-radius: 5px; margin-top: 5px; font-size: 0.9rem;">
+                                            {{ assignment.instructions|truncate(200) }}
+                                            {% if assignment.instructions|length > 200 %}
+                                                <a href="{{ url_for('submit_assignment', assignment_id=assignment.id) }}" style="color: var(--primary-blue);">...read more</a>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card-footer">
+                                <a href="{{ url_for('submit_assignment', assignment_id=assignment.id) }}" class="btn btn-green">
+                                    <i class="fas fa-paper-plane"></i> Submit Assignment
+                                </a>
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label for="due-date">Due Date</label>
-                            <input type="text" id="due-date" class="form-control" value="June 15, 2023" readonly>
-                        </div>
+                        {% endfor %}
                     </div>
-
-                    <div class="form-group">
-                        <label>Assignment Instructions</label>
-                        <div style="background-color: var(--light-gray); padding: 15px; border-radius: 8px; margin-top: 5px;">
-                            <p>Implement a binary search tree with the following operations: insert, delete, search, and traversal. Your solution should include proper documentation and test cases. Submit your code in a single .py file and a PDF report explaining your implementation.</p>
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label>Upload Your Work</label>
-                        <div class="file-upload">
-                            <i class="fas fa-cloud-upload-alt"></i>
-                            <p>Drag & drop your files here or click to browse</p>
-                            <p class="small">Only PDF, DOC, or ZIP files accepted (Max: 10MB)</p>
-                            <button class="btn btn-sm btn-green">
-                                <i class="fas fa-folder-open"></i> Browse Files
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="student-notes">Additional Notes (Optional)</label>
-                        <textarea id="student-notes" class="form-control" placeholder="Add any comments about your submission"></textarea>
-                    </div>
-
-                    <button class="btn btn-green" style="width: 100%; padding: 14px; font-size: 1.05rem;">
-                        <i class="fas fa-paper-plane"></i> Submit Assignment
-                    </button>
                 </div>
+                {% else %}
+                <div style="text-align: center; padding: 3rem; color: var(--text-light);">
+                    <i class="fas fa-tasks" style="font-size: 4rem; margin-bottom: 1rem; opacity: 0.3;"></i>
+                    <h3>No Assignments Available</h3>
+                    <p>You don't have any assignments to submit right now. Check back later or contact your instructor.</p>
+                    <a href="{{ url_for('student_assignments_list') }}" class="btn btn-green" style="margin-top: 1rem;">
+                        <i class="fas fa-history"></i> View All Assignments
+                    </a>
+                </div>
+                {% endif %}
             </div>
 
             <!-- Performance Tracker -->
             <div id="performance-tracker" class="tab-content">
                 <div class="page-header">
                     <h1 class="page-title">Performance Tracker</h1>
-                    <button class="btn btn-green">
+                    <a href="{{ url_for('student_report_pdf') }}" class="btn btn-green">
                         <i class="fas fa-download"></i> Download Report
-                    </button>
+                    </a>
                 </div>
 
                 <div class="tabs">
@@ -1172,7 +1223,7 @@
                                         <td>
                                             <div style="display: flex; align-items: center; gap: 10px;">
                                                 <div style="width: 100px; height: 8px; background-color: var(--medium-gray); border-radius: 4px;">
-                                                    <div style="width: {{ progress_percent }}%; height: 100%; background-color: {% if progress_percent >= 80 %}var(--primary-green){% elif progress_percent >= 50 %}var(--warning){% else %}var(--danger){% endif %}; border-radius: 4px;"></div>
+                                                    <div class="progress-bar {% if progress_percent >= 80 %}bg-success{% elif progress_percent >= 50 %}bg-warning{% else %}bg-danger{% endif %}" style="width: {{ progress_percent }}%; height: 100%; border-radius: 4px;"></div>
                                                 </div>
                                                 <span>{{ "%.0f"|format(progress_percent) }}%</span>
                                             </div>
@@ -1334,6 +1385,22 @@
     </div>
 
     <script>
+        // Profile dropdown functionality
+        function toggleProfileDropdown() {
+            const dropdown = document.getElementById('profileDropdown');
+            dropdown.classList.toggle('show');
+        }
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(event) {
+            const dropdown = document.getElementById('profileDropdown');
+            const avatar = document.querySelector('.user-avatar');
+            
+            if (!dropdown.contains(event.target) && !avatar.contains(event.target)) {
+                dropdown.classList.remove('show');
+            }
+        });
+
         // Tab navigation
         function showTab(tabId) {
             // Hide all tab contents

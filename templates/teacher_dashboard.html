@@ -144,6 +144,58 @@
             align-items: center;
             justify-content: center;
             font-weight: 500;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .user-avatar:hover {
+            background-color: #2980b9;
+            transform: scale(1.05);
+        }
+
+        .profile-dropdown {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            background: white;
+            border-radius: 8px;
+            box-shadow: var(--shadow-md);
+            min-width: 200px;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-10px);
+            transition: var(--transition);
+            z-index: 1000;
+            margin-top: 10px;
+        }
+
+        .profile-dropdown.show {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+
+        .dropdown-item {
+            display: block;
+            padding: 12px 16px;
+            color: var(--text-dark);
+            text-decoration: none;
+            transition: var(--transition);
+            border-bottom: 1px solid var(--medium-gray);
+        }
+
+        .dropdown-item:last-child {
+            border-bottom: none;
+        }
+
+        .dropdown-item:hover {
+            background-color: var(--light-gray);
+            color: var(--primary-blue);
+        }
+
+        .dropdown-item i {
+            margin-right: 8px;
+            width: 16px;
         }
 
         .dashboard-layout {
@@ -773,7 +825,21 @@
                     <div class="user-name">Welcome, {{ teacher.full_name if teacher else 'Teacher' }}</div>
                     <div class="user-role">Teacher Portal</div>
                 </div>
-                <div class="user-avatar">{{ (teacher.full_name[0] if teacher and teacher.full_name else 'T')|upper }}
+                <div class="user-avatar" onclick="toggleProfileDropdown()">{{ (teacher.full_name[0] if teacher and teacher.full_name else 'T')|upper }}
+                </div>
+                <div class="profile-dropdown" id="profileDropdown">
+                    <a href="{{ url_for('teacher_profile') }}" class="dropdown-item">
+                        <i class="fas fa-user"></i> View Profile
+                    </a>
+                    <a href="{{ url_for('teacher_profile_edit') }}" class="dropdown-item">
+                        <i class="fas fa-edit"></i> Edit Profile
+                    </a>
+                    <a href="{{ url_for('teacher_analytics') }}" class="dropdown-item">
+                        <i class="fas fa-chart-bar"></i> Analytics
+                    </a>
+                    <a href="{{ url_for('teacher_logout') }}" class="dropdown-item">
+                        <i class="fas fa-sign-out-alt"></i> Logout
+                    </a>
                 </div>
             </div>
         </nav>
@@ -944,7 +1010,7 @@
                            class="btn btn-sm btn-success">
                             <i class="fas fa-check"></i> Approve
                         </a>
-                        <a href="{{ url_for('student_profile', student_id=enrollment.student.id) }}" 
+                        <a href="{{ url_for('teacher_view_student_profile', student_id=enrollment.student.id) }}" 
                            class="btn btn-sm btn-info">
                             <i class="fas fa-user"></i> View Profile
                         </a>
@@ -1123,8 +1189,7 @@
                     <div class="evaluation-header">
                         <div><h4 class="evaluation-title mb-1">{{ sub.assignment.title }}</h4>
                             <div class="d-flex align-items-center small text-muted flex-wrap">
-                                <div class="me-3 mb-1"><i class="fas fa-user me-1"></i><strong>{{ sub.student.full_name
-                                    }}</strong> ({{sub.student.username}})
+                                <div class="me-3 mb-1"><i class="fas fa-user me-1"></i><strong><a href="{{ url_for('teacher_view_student_profile', student_id=sub.student.id) }}" style="color: inherit; text-decoration: none;" title="View {{ sub.student.full_name }}'s profile">{{ sub.student.full_name }}</a></strong> ({{sub.student.username}})
                                 </div>
                                 <div class="me-3 mb-1"><span class="badge bg-secondary rounded-pill">{{ sub.assignment.classroom.name }}</span>
                                 </div>
@@ -1179,8 +1244,7 @@
                     <div class="evaluation-header">
                         <div><h4 class="evaluation-title mb-1">{{ sub.assignment.title }}</h4>
                             <div class="d-flex align-items-center small text-muted flex-wrap">
-                                <div class="me-3 mb-1"><i class="fas fa-user me-1"></i><strong>{{ sub.student.full_name
-                                    }}</strong> ({{sub.student.username}})
+                                <div class="me-3 mb-1"><i class="fas fa-user me-1"></i><strong><a href="{{ url_for('teacher_view_student_profile', student_id=sub.student.id) }}" style="color: inherit; text-decoration: none;" title="View {{ sub.student.full_name }}'s profile">{{ sub.student.full_name }}</a></strong> ({{sub.student.username}})
                                 </div>
                                 <div class="me-3 mb-1"><span class="badge bg-secondary rounded-pill">{{ sub.assignment.classroom.name }}</span>
                                 </div>
@@ -1192,11 +1256,9 @@
                         <div class="text-end"><span class="status-badge status-graded">Evaluated</span></div>
                     </div>
                     <div class="form-group mb-2"><label class="mb-1 fw-bold">Student's Answer:</label>
-                        <div class="answer-text">{{ sub.answer_text|truncate(300) }}
-                            {% if sub.answer_text|length > 300 %}
-                            <div class="text-end mt-1"><a href="#" class="small"
-                                                          onclick="alert('Full answer:\n\n{{ sub.answer_text|escape|replace('\n', '\\n')|replace("'",
-                                "\\'") }}'); return false;">View full answer</a></div>
+                        <div class="answer-text">{{ sub.answer_text|truncate(500) }}
+                            {% if sub.answer_text|length > 500 %}
+                                <span class="text-muted">... (truncated)</span>
                             {% endif %}
                         </div>
                     </div>
@@ -1441,6 +1503,21 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
+
+    function toggleProfileDropdown() {
+        const dropdown = document.getElementById('profileDropdown');
+        dropdown.classList.toggle('show');
+    }
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function(event) {
+        const dropdown = document.getElementById('profileDropdown');
+        const avatar = document.querySelector('.user-avatar');
+        
+        if (!dropdown.contains(event.target) && !avatar.contains(event.target)) {
+            dropdown.classList.remove('show');
+        }
+    });
 
     function showTab(tabId) {
         document.querySelectorAll('.main-content .tab-content').forEach(t => t.classList.remove('active'));
