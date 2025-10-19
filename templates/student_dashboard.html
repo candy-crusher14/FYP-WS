@@ -1111,7 +1111,13 @@
                                     <i class="fas fa-chart-line"></i>
                                 </div>
                             </div>
-                            <div class="widget-value">87%</div>
+                            <div class="widget-value">
+                                {% if avg_score > 0 %}
+                                    {{ "%.0f"|format(avg_score) }}%
+                                {% else %}
+                                    --
+                                {% endif %}
+                            </div>
                             <div class="widget-description">Your current average score</div>
                         </div>
 
@@ -1122,7 +1128,7 @@
                                     <i class="fas fa-check-circle"></i>
                                 </div>
                             </div>
-                            <div class="widget-value">18</div>
+                            <div class="widget-value">{{ evaluated_submissions }}</div>
                             <div class="widget-description">Assignments completed</div>
                         </div>
 
@@ -1133,7 +1139,7 @@
                                     <i class="fas fa-clock"></i>
                                 </div>
                             </div>
-                            <div class="widget-value">5</div>
+                            <div class="widget-value">{{ available_assignments|length }}</div>
                             <div class="widget-description">Assignments to complete</div>
                         </div>
                     </div>
@@ -1151,48 +1157,36 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr>
-                                    <td>CS101 - Intro to Programming</td>
-                                    <td>5/8</td>
-                                    <td>92%</td>
-                                    <td>4/45</td>
-                                    <td>
-                                        <div style="display: flex; align-items: center; gap: 10px;">
-                                            <div style="width: 100px; height: 8px; background-color: var(--medium-gray); border-radius: 4px;">
-                                                <div style="width: 62%; height: 100%; background-color: var(--primary-green); border-radius: 4px;"></div>
+                                {% if enrolled_classrooms %}
+                                    {% for classroom in enrolled_classrooms %}
+                                    {% set student_submissions = recent_submissions|selectattr('assignment.classroom_id', 'equalto', classroom.id)|list %}
+                                    {% set completed_count = student_submissions|selectattr('evaluated_at', 'defined')|list|length %}
+                                    {% set total_assignments = classroom.assignments.count() %}
+                                    {% set avg_score = (student_submissions|selectattr('display_score', 'defined')|map(attribute='display_score')|sum / student_submissions|selectattr('display_score', 'defined')|list|length) if student_submissions|selectattr('display_score', 'defined')|list else 0 %}
+                                    {% set progress_percent = (completed_count / total_assignments * 100) if total_assignments > 0 else 0 %}
+                                    <tr>
+                                        <td>{{ classroom.name }}</td>
+                                        <td>{{ completed_count }}/{{ total_assignments }}</td>
+                                        <td>{{ "%.0f"|format(avg_score) }}%</td>
+                                        <td>{{ classroom.enrollments_count }} students</td>
+                                        <td>
+                                            <div style="display: flex; align-items: center; gap: 10px;">
+                                                <div style="width: 100px; height: 8px; background-color: var(--medium-gray); border-radius: 4px;">
+                                                    <div style="width: {{ progress_percent }}%; height: 100%; background-color: {% if progress_percent >= 80 %}var(--primary-green){% elif progress_percent >= 50 %}var(--warning){% else %}var(--danger){% endif %}; border-radius: 4px;"></div>
+                                                </div>
+                                                <span>{{ "%.0f"|format(progress_percent) }}%</span>
                                             </div>
-                                            <span>62%</span>
-                                        </div>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td>CS205 - Web Development</td>
-                                    <td>2/5</td>
-                                    <td>88%</td>
-                                    <td>7/42</td>
-                                    <td>
-                                        <div style="display: flex; align-items: center; gap: 10px;">
-                                            <div style="width: 100px; height: 8px; background-color: var(--medium-gray); border-radius: 4px;">
-                                                <div style="width: 40%; height: 100%; background-color: var(--warning); border-radius: 4px;"></div>
-                                            </div>
-                                            <span>40%</span>
-                                        </div>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td>CS301 - Algorithms</td>
-                                    <td>1/6</td>
-                                    <td>85%</td>
-                                    <td>12/38</td>
-                                    <td>
-                                        <div style="display: flex; align-items: center; gap: 10px;">
-                                            <div style="width: 100px; height: 8px; background-color: var(--medium-gray); border-radius: 4px;">
-                                                <div style="width: 17%; height: 100%; background-color: var(--danger); border-radius: 4px;"></div>
-                                            </div>
-                                            <span>17%</span>
-                                        </div>
-                                    </td>
-                                </tr>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                {% else %}
+                                    <tr>
+                                        <td colspan="5" style="text-align: center; color: var(--text-light); padding: 40px;">
+                                            <i class="fas fa-graduation-cap" style="font-size: 2rem; margin-bottom: 10px; display: block;"></i>
+                                            No classrooms joined yet. Join a classroom to see your performance!
+                                        </td>
+                                    </tr>
+                                {% endif %}
                             </tbody>
                         </table>
                     </div>
@@ -1212,121 +1206,128 @@
                                 </tr>
                             </thead>
                             <tbody>
+                                <!-- Recent Submissions -->
+                                {% for submission in recent_submissions %}
                                 <tr>
-                                    <td>Data Structures Final Project</td>
-                                    <td>CS101</td>
-                                    <td>Jun 15, 2023</td>
-                                    <td><span class="status-badge status-graded">Graded</span></td>
-                                    <td>92/100</td>
+                                    <td>{{ submission.assignment.title }}</td>
+                                    <td>{{ submission.assignment.classroom.name }}</td>
+                                    <td>{{ submission.assignment.submission_deadline.strftime('%b %d, %Y') }}</td>
                                     <td>
-                                        <button class="btn btn-sm btn-green">View Report</button>
+                                        {% if submission.evaluated_at %}
+                                            <span class="status-badge status-graded">Graded</span>
+                                        {% elif submission.submitted_at %}
+                                            <span class="status-badge status-submitted">Submitted</span>
+                                        {% else %}
+                                            <span class="status-badge status-pending">Not Started</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if submission.display_score is not none %}
+                                            {{ submission.display_score }}/{{ submission.assignment.max_score }}
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if submission.evaluated_at %}
+                                            <a href="{{ url_for('student_report_pdf') }}?submission_id={{ submission.id }}" class="btn btn-sm btn-green" target="_blank">View Report</a>
+                                        {% elif submission.submitted_at %}
+                                            <button class="btn btn-sm">View Details</button>
+                                        {% else %}
+                                            <a href="{{ url_for('submit_assignment', assignment_id=submission.assignment.id) }}" class="btn btn-sm btn-primary">Start</a>
+                                        {% endif %}
                                     </td>
                                 </tr>
+                                {% endfor %}
+                                
+                                <!-- Available Assignments -->
+                                {% for assignment in available_assignments %}
                                 <tr>
-                                    <td>Web Development Assignment</td>
-                                    <td>CS205</td>
-                                    <td>Jun 10, 2023</td>
-                                    <td><span class="status-badge status-submitted">Submitted</span></td>
+                                    <td>{{ assignment.title }}</td>
+                                    <td>{{ assignment.classroom.name }}</td>
+                                    <td>{{ assignment.submission_deadline.strftime('%b %d, %Y') }}</td>
+                                    <td><span class="status-badge status-pending">Available</span></td>
                                     <td>-</td>
                                     <td>
-                                        <button class="btn btn-sm">View Details</button>
+                                        <a href="{{ url_for('submit_assignment', assignment_id=assignment.id) }}" class="btn btn-sm btn-primary">Start</a>
                                     </td>
                                 </tr>
+                                {% endfor %}
+                                
+                                {% if not recent_submissions and not available_assignments %}
                                 <tr>
-                                    <td>Algorithms Problem Set 3</td>
-                                    <td>CS301</td>
-                                    <td>Jun 20, 2023</td>
-                                    <td><span class="status-badge status-pending">Not Started</span></td>
-                                    <td>-</td>
-                                    <td>
-                                        <button class="btn btn-sm">Start</button>
+                                    <td colspan="6" style="text-align: center; color: var(--text-light); padding: 40px;">
+                                        <i class="fas fa-clipboard-list" style="font-size: 2rem; margin-bottom: 10px; display: block;"></i>
+                                        No assignments found. Join a classroom to see assignments!
                                     </td>
                                 </tr>
-                                <tr>
-                                    <td>OOP Principles Lab</td>
-                                    <td>CS101</td>
-                                    <td>Jun 5, 2023</td>
-                                    <td><span class="status-badge status-graded">Graded</span></td>
-                                    <td>95/100</td>
-                                    <td>
-                                        <button class="btn btn-sm btn-green">View Report</button>
-                                    </td>
-                                </tr>
+                                {% endif %}
                             </tbody>
                         </table>
                     </div>
                 </div>
 
                 <div id="feedback-tab" class="tab-content">
+                    {% set latest_feedback = recent_submissions|selectattr('evaluated_at', 'defined')|selectattr('gemini_comment', 'defined')|first %}
+                    {% if latest_feedback %}
                     <div class="feedback-container">
                         <div class="feedback-header">
                             <div>
-                                <div class="feedback-title">Data Structures Final Project</div>
-                                <div class="feedback-meta">CS101 - Submitted: June 14, 2023</div>
+                                <div class="feedback-title">{{ latest_feedback.assignment.title }}</div>
+                                <div class="feedback-meta">{{ latest_feedback.assignment.classroom.name }} - Submitted: {{ latest_feedback.submitted_at.strftime('%B %d, %Y') }}</div>
                             </div>
                             <div class="score-container">
-                                <div class="score-value">92</div>
-                                <div class="score-total">/ 100</div>
+                                <div class="score-value">{{ latest_feedback.display_score or 0 }}</div>
+                                <div class="score-total">/ {{ latest_feedback.assignment.max_score }}</div>
                             </div>
                         </div>
 
                         <div class="feedback-section">
                             <div class="section-title">Overall Feedback</div>
-                            <p>Excellent implementation of the binary search tree with all required operations. Your code is well-structured and follows best practices. The documentation is thorough, and your test cases cover all edge cases effectively. The report demonstrates a deep understanding of the data structure and its applications.</p>
+                            <p>{{ latest_feedback.gemini_comment or 'No detailed feedback available yet.' }}</p>
 
+                            {% if latest_feedback.evaluation_method == 'gemini' or latest_feedback.evaluation_method == 'gemini_fallback' %}
                             <div class="ai-insight">
                                 <div class="ai-insight-header">
                                     <i class="fas fa-robot"></i>
                                     <h4>AI Insight</h4>
                                 </div>
-                                <p>The student's implementation shows a strong grasp of data structures. The binary search tree operations are optimized with O(log n) complexity in most cases. The report could be improved by adding more real-world application examples.</p>
+                                <p>This assignment was evaluated using AI analysis. The feedback above provides detailed insights into your work quality and areas for improvement.</p>
                             </div>
+                            {% endif %}
                         </div>
 
                         <div class="feedback-section">
-                            <div class="section-title">Strengths</div>
-                            <ul class="strengths-list">
-                                <li>Clean and efficient code implementation</li>
-                                <li>Comprehensive test coverage</li>
-                                <li>Excellent documentation and comments</li>
-                                <li>Clear and well-structured report</li>
-                                <li>Proper handling of edge cases</li>
-                            </ul>
-                        </div>
-
-                        <div class="feedback-section">
-                            <div class="section-title">Areas for Improvement</div>
-                            <ul class="weaknesses-list">
-                                <li>Could implement additional traversal methods</li>
-                                <li>Include more real-world examples in the report</li>
-                                <li>Add complexity analysis for each operation</li>
-                                <li>Consider adding visualization of the tree structure</li>
-                            </ul>
-                        </div>
-
-                        <div class="feedback-section">
-                            <div class="section-title">Detailed Feedback by Section</div>
+                            <div class="section-title">Assignment Score</div>
                             <div style="margin-top: 15px;">
-                                <div style="font-weight: 500; margin-bottom: 5px;">Insert Operation (25/25)</div>
-                                <p>Perfect implementation with proper balancing consideration. Handles duplicates correctly.</p>
-
-                                <div style="font-weight: 500; margin: 15px 0 5px;">Delete Operation (23/25)</div>
-                                <p>Excellent implementation but missing one edge case for node with two children.</p>
-
-                                <div style="font-weight: 500; margin: 15px 0 5px;">Traversal Methods (22/25)</div>
-                                <p>Implemented inorder and preorder correctly. Would benefit from adding postorder traversal.</p>
-
-                                <div style="font-weight: 500; margin: 15px 0 5px;">Report Quality (22/25)</div>
-                                <p>Well-written but could include more real-world applications and complexity analysis.</p>
+                                <div style="font-weight: 500; margin-bottom: 5px;">
+                                    Score: {{ latest_feedback.display_score }}/{{ latest_feedback.assignment.max_score }} 
+                                    ({{ "%.1f"|format((latest_feedback.display_score / latest_feedback.assignment.max_score * 100)) }}%)
+                                </div>
+                                <div style="font-weight: 500; margin-bottom: 5px;">
+                                    Evaluation Method: {{ latest_feedback.evaluation_method|title }}
+                                </div>
+                                {% if latest_feedback.overridden_by %}
+                                <div style="font-weight: 500; margin-bottom: 5px; color: var(--warning);">
+                                    <i class="fas fa-edit"></i> Score manually adjusted by teacher
+                                </div>
+                                {% endif %}
                             </div>
                         </div>
 
                         <div style="text-align: center; margin-top: 30px;">
-                            <button class="btn btn-green">
+                            <a href="{{ url_for('student_report_pdf') }}?submission_id={{ latest_feedback.id }}" class="btn btn-green" target="_blank">
                                 <i class="fas fa-download"></i> Download Full Report
-                            </button>
+                            </a>
                         </div>
                     </div>
+                    {% else %}
+                    <div style="text-align: center; color: var(--text-light); padding: 60px 20px;">
+                        <i class="fas fa-comments" style="font-size: 3rem; margin-bottom: 20px; display: block;"></i>
+                        <h3>No AI Feedback Available</h3>
+                        <p>Submit and complete assignments to see detailed AI feedback and performance insights.</p>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>

@@ -620,33 +620,232 @@
             <div id="user-management" class="tab-content">
                 <div class="page-header">
                     <h1 class="page-title">User Management</h1>
-                    <button class="btn btn-primary">
-                        <i class="fas fa-user-plus"></i> Add User
-                    </button>
                 </div>
-                <p>User management functionality will be implemented here...</p>
+                
+                <!-- Students Section -->
+                <h2 style="margin-bottom: 20px;">Students</h2>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>University</th>
+                                <th>Department</th>
+                                <th>Year</th>
+                                <th>Joined</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if admin.role == 'university_admin' and admin.university %}
+                                {% for student in students.all() %}
+                                <tr>
+                                    <td>{{ student.full_name }}</td>
+                                    <td>{{ student.email }}</td>
+                                    <td>{{ student.university }}</td>
+                                    <td>{{ student.department }}</td>
+                                    <td>Year {{ student.year }}</td>
+                                    <td>{{ student.created_at.strftime('%b %d, %Y') }}</td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                {% for student in Student.query.all() %}
+                                <tr>
+                                    <td>{{ student.full_name }}</td>
+                                    <td>{{ student.email }}</td>
+                                    <td>{{ student.university }}</td>
+                                    <td>{{ student.department }}</td>
+                                    <td>Year {{ student.year }}</td>
+                                    <td>{{ student.created_at.strftime('%b %d, %Y') }}</td>
+                                </tr>
+                                {% endfor %}
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Teachers Section -->
+                <h2 style="margin-bottom: 20px; margin-top: 40px;">Teachers</h2>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>University</th>
+                                <th>Status</th>
+                                <th>Joined</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if admin.role == 'university_admin' and admin.university %}
+                                {% for teacher in teachers.all() %}
+                                <tr>
+                                    <td>{{ teacher.full_name }}</td>
+                                    <td>{{ teacher.email }}</td>
+                                    <td>{{ teacher.university }}</td>
+                                    <td>
+                                        {% if teacher.is_approved %}
+                                            <span class="status-badge status-approved">Approved</span>
+                                        {% else %}
+                                            <span class="status-badge status-pending">Pending</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ teacher.created_at.strftime('%b %d, %Y') }}</td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                {% for teacher in Teacher.query.all() %}
+                                <tr>
+                                    <td>{{ teacher.full_name }}</td>
+                                    <td>{{ teacher.email }}</td>
+                                    <td>{{ teacher.university }}</td>
+                                    <td>
+                                        {% if teacher.is_approved %}
+                                            <span class="status-badge status-approved">Approved</span>
+                                        {% else %}
+                                            <span class="status-badge status-pending">Pending</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ teacher.created_at.strftime('%b %d, %Y') }}</td>
+                                </tr>
+                                {% endfor %}
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
             <!-- System Analytics Tab -->
             <div id="system-analytics" class="tab-content">
                 <div class="page-header">
                     <h1 class="page-title">System Analytics</h1>
-                    <button class="btn btn-primary">
-                        <i class="fas fa-download"></i> Export Report
-                    </button>
                 </div>
-                <p>System analytics and reporting will be implemented here...</p>
+                
+                <!-- Analytics Widgets -->
+                <div class="dashboard-widgets">
+                    <div class="widget">
+                        <div class="widget-header">
+                            <div class="widget-title">Total Users</div>
+                            <div class="widget-icon"><i class="fas fa-users"></i></div>
+                        </div>
+                        <div class="widget-value">{{ (stats.students + stats.teachers) if stats else 'N/A' }}</div>
+                        <div class="widget-description">Students + Teachers</div>
+                    </div>
+                    <div class="widget">
+                        <div class="widget-header">
+                            <div class="widget-title">Active Assignments</div>
+                            <div class="widget-icon"><i class="fas fa-tasks"></i></div>
+                        </div>
+                        <div class="widget-value">{{ stats.assignments if stats else 'N/A' }}</div>
+                        <div class="widget-description">Total assignments created</div>
+                    </div>
+                    <div class="widget">
+                        <div class="widget-header">
+                            <div class="widget-title">System Load</div>
+                            <div class="widget-icon"><i class="fas fa-server"></i></div>
+                        </div>
+                        <div class="widget-value">{{ "%.1f"|format((stats.assignments / stats.classrooms * 100)) if (stats and stats.classrooms > 0) else '0.0' }}%</div>
+                        <div class="widget-description">Assignments per classroom</div>
+                    </div>
+                </div>
+
+                <!-- University Breakdown -->
+                {% if admin.role == 'admin' %}
+                <h2 style="margin-bottom: 20px; margin-top: 30px;">University Breakdown</h2>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>University</th>
+                                <th>Students</th>
+                                <th>Teachers</th>
+                                <th>Classrooms</th>
+                                <th>Assignments</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for university in ['University of Mirpur Khas', 'University of Sindh'] %}
+                            {% set uni_students = Student.query.filter_by(university=university).count() %}
+                            {% set uni_teachers = Teacher.query.filter_by(university=university).count() %}
+                            {% set uni_teacher_ids = Teacher.query.filter_by(university=university).with_entities(Teacher.id).all() %}
+                            {% set uni_classrooms = Classroom.query.filter(Classroom.teacher_id.in_([t.id for t in uni_teacher_ids])).count() if uni_teacher_ids else 0 %}
+                            {% set uni_assignments = Assignment.query.join(Classroom).join(Teacher).filter(Teacher.university == university).count() %}
+                            <tr>
+                                <td>{{ university }}</td>
+                                <td>{{ uni_students }}</td>
+                                <td>{{ uni_teachers }}</td>
+                                <td>{{ uni_classrooms }}</td>
+                                <td>{{ uni_assignments }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endif %}
             </div>
 
             <!-- System Settings Tab -->
             <div id="system-settings" class="tab-content">
                 <div class="page-header">
                     <h1 class="page-title">System Settings</h1>
-                    <button class="btn btn-primary">
-                        <i class="fas fa-save"></i> Save Settings
-                    </button>
                 </div>
-                <p>System configuration settings will be implemented here...</p>
+                
+                <!-- Admin Information -->
+                <h2 style="margin-bottom: 20px;">Admin Account Information</h2>
+                <div class="card">
+                    <div class="card-body">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <div>
+                                <strong>Username:</strong> {{ admin.username }}
+                            </div>
+                            <div>
+                                <strong>Full Name:</strong> {{ admin.full_name or 'Not Set' }}
+                            </div>
+                            <div>
+                                <strong>Email:</strong> {{ admin.email or 'Not Set' }}
+                            </div>
+                            <div>
+                                <strong>Role:</strong> {{ admin.role|title }}
+                            </div>
+                            {% if admin.university %}
+                            <div>
+                                <strong>University:</strong> {{ admin.university }}
+                            </div>
+                            {% endif %}
+                            <div>
+                                <strong>Account Created:</strong> {{ admin.created_at.strftime('%B %d, %Y') }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- System Information -->
+                <h2 style="margin-bottom: 20px; margin-top: 30px;">System Information</h2>
+                <div class="card">
+                    <div class="card-body">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <div>
+                                <strong>Application:</strong> Smart Classroom AI Evaluator
+                            </div>
+                            <div>
+                                <strong>Version:</strong> 1.0.0
+                            </div>
+                            <div>
+                                <strong>Database:</strong> SQLite
+                            </div>
+                            <div>
+                                <strong>AI Evaluation:</strong> {% if gemini_model %}Gemini Pro{% else %}Algorithm-based{% endif %}
+                            </div>
+                            <div>
+                                <strong>Total Database Records:</strong> {{ (stats.students + stats.teachers + stats.classrooms + stats.assignments) if stats else 'N/A' }}
+                            </div>
+                            <div>
+                                <strong>System Status:</strong> <span style="color: var(--success);">✓ Operational</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

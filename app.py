@@ -57,6 +57,7 @@ print('changes')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///exam_system.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'pool_pre_ping': True, 'pool_recycle': 300}
+app.config['UPLOAD_FOLDER'] = 'uploads'
 
 db = SQLAlchemy(app)
 
@@ -442,7 +443,13 @@ def admin_dashboard():
         }
         pending_teachers = Teacher.query.filter(Teacher.is_approved == False).order_by(Teacher.created_at.desc()).all()
     
-    return render_template('admin_dashboard.html', stats=stats, pending_teachers=pending_teachers, admin=admin)
+    # Pass additional data for user management and analytics
+    if admin.role == 'university_admin' and admin.university:
+        return render_template('admin_dashboard.html', stats=stats, pending_teachers=pending_teachers, 
+                             admin=admin, students=students, teachers=teachers)
+    else:
+        return render_template('admin_dashboard.html', stats=stats, pending_teachers=pending_teachers, 
+                             admin=admin, Student=Student, Teacher=Teacher, Classroom=Classroom, Assignment=Assignment)
 
 
 @app.route('/admin/logout')
@@ -1507,6 +1514,11 @@ def login():
                     if user and user.password != hash_password(password):
                         user = None
             if user:
+                # Check teacher approval status
+                if role == 'teacher' and not user.is_approved:
+                    flash(f'Your account is pending approval from {user.university} admin. Please wait for verification.', 'warning')
+                    return render_template('login.html', default_role=role, submitted_username=username)
+                
                 session[f'{role}_logged_in'], session[f'{role}_id'] = True, user.id
                 flash('Login successful!', 'success');
                 return redirect(url_for(f'{role}_dashboard'))
