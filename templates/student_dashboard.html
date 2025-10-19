@@ -727,6 +727,71 @@
             font-size: 1.1rem;
         }
 
+        /* Assignment Filters */
+        .assignment-filters {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .filter-btn {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 15px;
+            background: none;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: var(--transition);
+            font-size: 0.95rem;
+            color: var(--text-dark);
+            text-align: left;
+        }
+
+        .filter-btn:hover {
+            background-color: rgba(46, 204, 113, 0.1);
+            color: var(--primary-green);
+        }
+
+        .filter-btn.active {
+            background-color: var(--primary-green);
+            color: white;
+        }
+
+        .filter-btn i {
+            margin-right: 10px;
+            width: 16px;
+        }
+
+        .filter-count {
+            background-color: rgba(255, 255, 255, 0.2);
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        .filter-btn.active .filter-count {
+            background-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .assignment-group {
+            display: none;
+        }
+
+        .assignment-group.active {
+            display: block;
+        }
+
+        .assignment-row {
+            display: table-row;
+        }
+
+        .assignment-row.hidden {
+            display: none;
+        }
+
         /* Responsive Design */
         @media (max-width: 992px) {
             .sidebar {
@@ -876,7 +941,7 @@
                         <a href="{{ url_for('student_profile_edit') }}" class="dropdown-item">
                             <i class="fas fa-edit"></i> Edit Profile
                         </a>
-                        <a href="{{ url_for('student_assignments_list') }}" class="dropdown-item">
+                        <a href="#" onclick="showTab('assignments-view'); toggleProfileDropdown(); return false;" class="dropdown-item">
                             <i class="fas fa-tasks"></i> My Assignments
                         </a>
                         <a href="{{ url_for('student_report_pdf') }}" class="dropdown-item">
@@ -908,6 +973,10 @@
                 <li class="menu-item" onclick="showTab('assignment-submitter')">
                     <i class="fas fa-file-upload"></i>
                     <span class="menu-text">Submit Assignment</span>
+                </li>
+                <li class="menu-item" onclick="showTab('assignments-view')">
+                    <i class="fas fa-tasks"></i>
+                    <span class="menu-text">View Assignments</span>
                 </li>
                 <li class="menu-item" onclick="showTab('performance-tracker')">
                     <i class="fas fa-chart-line"></i>
@@ -1059,7 +1128,7 @@
                             </div>
                         </div>
                         <div class="card-footer">
-                            <a href="{{ url_for('student_assignments_list') }}" class="btn btn-sm btn-green">View Assignments</a>
+                            <a href="#" onclick="showTab('assignments-view'); return false;" class="btn btn-sm btn-green">View Assignments</a>
                         </div>
                     </div>
                     {% endfor %}
@@ -1080,8 +1149,8 @@
             <div id="assignment-submitter" class="tab-content">
                 <div class="page-header">
                     <h1 class="page-title">Submit Assignment</h1>
-                    <a href="{{ url_for('student_assignments_list') }}" class="btn btn-green">
-                        <i class="fas fa-history"></i> Submission History
+                    <a href="#" onclick="showTab('assignments-view'); return false;" class="btn btn-green">
+                        <i class="fas fa-history"></i> View All Assignments
                     </a>
                 </div>
 
@@ -1131,11 +1200,127 @@
                     <i class="fas fa-tasks" style="font-size: 4rem; margin-bottom: 1rem; opacity: 0.3;"></i>
                     <h3>No Assignments Available</h3>
                     <p>You don't have any assignments to submit right now. Check back later or contact your instructor.</p>
-                    <a href="{{ url_for('student_assignments_list') }}" class="btn btn-green" style="margin-top: 1rem;">
-                        <i class="fas fa-history"></i> View All Assignments
+                    <a href="#" onclick="showTab('assignments-view'); return false;" class="btn btn-green" style="margin-top: 1rem;">
+                        <i class="fas fa-tasks"></i> View All Assignments
                     </a>
                 </div>
                 {% endif %}
+            </div>
+
+            <!-- Assignments View -->
+            <div id="assignments-view" class="tab-content">
+                <div class="page-header">
+                    <h1 class="page-title">My Assignments</h1>
+                    <a href="{{ url_for('student_report_pdf') }}" class="btn btn-green">
+                        <i class="fas fa-download"></i> Download Report
+                    </a>
+                </div>
+
+                <div style="display: flex; gap: 20px;">
+                    <!-- Left Sidebar Filters -->
+                    <div style="width: 250px; background: white; border-radius: 10px; padding: 20px; box-shadow: var(--shadow-sm); height: fit-content;">
+                        <h3 style="margin-bottom: 20px; color: var(--text-dark); font-size: 1.1rem;">Filter Assignments</h3>
+                        <div class="assignment-filters">
+                            <button class="filter-btn active" onclick="filterAssignments('all')">
+                                <i class="fas fa-list"></i> All Assignments
+                                <span class="filter-count">{{ (recent_submissions|default([])|length) + (available_assignments|default([])|length) }}</span>
+                            </button>
+                            <button class="filter-btn" onclick="filterAssignments('submitted')">
+                                <i class="fas fa-check-circle"></i> Submitted
+                                <span class="filter-count">{{ (recent_submissions|selectattr('submitted_at', 'defined')|list|length if recent_submissions else 0) }}</span>
+                            </button>
+                            <button class="filter-btn" onclick="filterAssignments('pending')">
+                                <i class="fas fa-clock"></i> Pending
+                                <span class="filter-count">{{ (available_assignments|length if available_assignments else 0) }}</span>
+                            </button>
+                            <button class="filter-btn" onclick="filterAssignments('graded')">
+                                <i class="fas fa-star"></i> Graded
+                                <span class="filter-count">{{ (recent_submissions|selectattr('evaluated_at', 'defined')|list|length if recent_submissions else 0) }}</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Assignments Content -->
+                    <div style="flex: 1;">
+                        <div class="assignments-container">
+                            <!-- All Assignments -->
+                            <div id="all-assignments" class="assignment-group active">
+                                <div class="table-container">
+                                    <table>
+                                        <thead>
+                                            <tr>
+                                                <th>Assignment</th>
+                                                <th>Class</th>
+                                                <th>Due Date</th>
+                                                <th>Status</th>
+                                                <th>Score</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <!-- Recent Submissions -->
+                                            {% for submission in recent_submissions %}
+                                            <tr class="assignment-row" data-status="{{ 'graded' if submission.evaluated_at else ('submitted' if submission.submitted_at else 'pending') }}">
+                                                <td>{{ submission.assignment.title }}</td>
+                                                <td>{{ submission.assignment.classroom.name }}</td>
+                                                <td>{{ submission.assignment.submission_deadline.strftime('%b %d, %Y') }}</td>
+                                                <td>
+                                                    {% if submission.evaluated_at %}
+                                                        <span class="status-badge status-graded">Graded</span>
+                                                    {% elif submission.submitted_at %}
+                                                        <span class="status-badge status-submitted">Submitted</span>
+                                                    {% else %}
+                                                        <span class="status-badge status-pending">Not Started</span>
+                                                    {% endif %}
+                                                </td>
+                                                <td>
+                                                    {% if submission.display_score is not none %}
+                                                        {{ submission.display_score }}/{{ submission.assignment.max_score }}
+                                                    {% else %}
+                                                        -
+                                                    {% endif %}
+                                                </td>
+                                                <td>
+                                                    {% if submission.evaluated_at %}
+                                                        <a href="{{ url_for('student_report_pdf') }}?submission_id={{ submission.id }}" class="btn btn-sm btn-green" target="_blank">View Report</a>
+                                                    {% elif submission.submitted_at %}
+                                                        <a href="{{ url_for('view_submission_details', submission_id=submission.id) }}" class="btn btn-sm">View Details</a>
+                                                    {% else %}
+                                                        <a href="{{ url_for('submit_assignment', assignment_id=submission.assignment.id) }}" class="btn btn-sm btn-primary">Start</a>
+                                                    {% endif %}
+                                                </td>
+                                            </tr>
+                                            {% endfor %}
+                                            
+                                            <!-- Available Assignments -->
+                                            {% for assignment in available_assignments %}
+                                            <tr class="assignment-row" data-status="pending">
+                                                <td>{{ assignment.title }}</td>
+                                                <td>{{ assignment.classroom.name }}</td>
+                                                <td>{{ assignment.submission_deadline.strftime('%b %d, %Y') }}</td>
+                                                <td><span class="status-badge status-pending">Available</span></td>
+                                                <td>-</td>
+                                                <td>
+                                                    <a href="{{ url_for('submit_assignment', assignment_id=assignment.id) }}" class="btn btn-sm btn-primary">Start</a>
+                                                </td>
+                                            </tr>
+                                            {% endfor %}
+                                            
+                                            {% if not recent_submissions and not available_assignments %}
+                                            <tr>
+                                                <td colspan="6" style="text-align: center; color: var(--text-light); padding: 40px;">
+                                                    <i class="fas fa-clipboard-list" style="font-size: 2rem; margin-bottom: 10px; display: block;"></i>
+                                                    No assignments found. Join a classroom to see assignments!
+                                                </td>
+                                            </tr>
+                                            {% endif %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Performance Tracker -->
@@ -1213,7 +1398,14 @@
                                     {% set student_submissions = recent_submissions|selectattr('assignment.classroom_id', 'equalto', classroom.id)|list %}
                                     {% set completed_count = student_submissions|selectattr('evaluated_at', 'defined')|list|length %}
                                     {% set total_assignments = classroom.assignments.count() %}
-                                    {% set avg_score = (student_submissions|selectattr('display_score', 'defined')|map(attribute='display_score')|sum / student_submissions|selectattr('display_score', 'defined')|list|length) if student_submissions|selectattr('display_score', 'defined')|list else 0 %}
+                                    {% set scored_submissions = student_submissions|selectattr('display_score', 'defined')|list %}
+                                    {% set valid_scores = [] %}
+                                    {% for sub in scored_submissions %}
+                                        {% if sub.display_score is not none %}
+                                            {% set _ = valid_scores.append(sub.display_score) %}
+                                        {% endif %}
+                                    {% endfor %}
+                                    {% set avg_score = (valid_scores|sum / valid_scores|length) if valid_scores else 0 %}
                                     {% set progress_percent = (completed_count / total_assignments * 100) if total_assignments > 0 else 0 %}
                                     <tr>
                                         <td>{{ classroom.name }}</td>
@@ -1223,7 +1415,7 @@
                                         <td>
                                             <div style="display: flex; align-items: center; gap: 10px;">
                                                 <div style="width: 100px; height: 8px; background-color: var(--medium-gray); border-radius: 4px;">
-                                                    <div class="progress-bar {% if progress_percent >= 80 %}bg-success{% elif progress_percent >= 50 %}bg-warning{% else %}bg-danger{% endif %}" style="width: {{ progress_percent }}%; height: 100%; border-radius: 4px;"></div>
+                                                    <div style="width: {{ progress_percent }}%; height: 100%; border-radius: 4px; background-color: {% if progress_percent >= 80 %}var(--success){% elif progress_percent >= 50 %}var(--warning){% else %}var(--danger){% endif %};"></div>
                                                 </div>
                                                 <span>{{ "%.0f"|format(progress_percent) }}%</span>
                                             </div>
@@ -1283,7 +1475,7 @@
                                         {% if submission.evaluated_at %}
                                             <a href="{{ url_for('student_report_pdf') }}?submission_id={{ submission.id }}" class="btn btn-sm btn-green" target="_blank">View Report</a>
                                         {% elif submission.submitted_at %}
-                                            <button class="btn btn-sm">View Details</button>
+                                            <a href="{{ url_for('view_submission_details', submission_id=submission.id) }}" class="btn btn-sm">View Details</a>
                                         {% else %}
                                             <a href="{{ url_for('submit_assignment', assignment_id=submission.assignment.id) }}" class="btn btn-sm btn-primary">Start</a>
                                         {% endif %}
@@ -1353,7 +1545,7 @@
                             <div style="margin-top: 15px;">
                                 <div style="font-weight: 500; margin-bottom: 5px;">
                                     Score: {{ latest_feedback.display_score }}/{{ latest_feedback.assignment.max_score }} 
-                                    ({{ "%.1f"|format((latest_feedback.display_score / latest_feedback.assignment.max_score * 100)) }}%)
+                                    ({{ "%.1f"|format(((latest_feedback.display_score or 0) / (latest_feedback.assignment.max_score or 1) * 100)) }}%)
                                 </div>
                                 <div style="font-weight: 500; margin-bottom: 5px;">
                                     Evaluation Method: {{ latest_feedback.evaluation_method|title }}
@@ -1409,13 +1601,34 @@
             });
 
             // Show selected tab
-            document.getElementById(tabId).classList.add('active');
+            const targetTab = document.getElementById(tabId);
+            if (targetTab) {
+                targetTab.classList.add('active');
+                
+                // Trigger any tab-specific initialization
+                if (tabId === 'assignments-view') {
+                    // Reset filter to show all assignments
+                    document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+                    document.querySelector('.filter-btn[onclick*="all"]').classList.add('active');
+                    filterAssignments('all');
+                }
+            }
 
             // Update menu items
             document.querySelectorAll('.menu-item').forEach(item => {
                 item.classList.remove('active');
             });
-            event.currentTarget.classList.add('active');
+            
+            // Find and activate the correct menu item
+            document.querySelectorAll('.menu-item').forEach(item => {
+                const onclick = item.getAttribute('onclick');
+                if (onclick && onclick.includes(tabId)) {
+                    item.classList.add('active');
+                }
+            });
+            
+            // Store active tab in localStorage
+            localStorage.setItem('activeStudentTab', tabId);
         }
 
         // Performance tab switching
@@ -1431,6 +1644,32 @@
             document.getElementById('feedback-tab').classList.toggle('active', tab === 'feedback');
         }
 
+        // Assignment filtering
+        function filterAssignments(filter) {
+            // Update filter buttons
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.currentTarget.classList.add('active');
+
+            // Show/hide assignment rows based on filter
+            const rows = document.querySelectorAll('.assignment-row');
+            rows.forEach(row => {
+                const status = row.getAttribute('data-status');
+                if (filter === 'all') {
+                    row.classList.remove('hidden');
+                } else if (filter === 'submitted' && (status === 'submitted' || status === 'graded')) {
+                    row.classList.remove('hidden');
+                } else if (filter === 'pending' && status === 'pending') {
+                    row.classList.remove('hidden');
+                } else if (filter === 'graded' && status === 'graded') {
+                    row.classList.remove('hidden');
+                } else {
+                    row.classList.add('hidden');
+                }
+            });
+        }
+
         // Mobile sidebar toggle
         document.getElementById('sidebarToggle').addEventListener('click', function() {
             document.getElementById('sidebar').classList.toggle('active');
@@ -1438,10 +1677,17 @@
 
         // Initialize page
         document.addEventListener('DOMContentLoaded', function() {
-            // Set active tab based on URL hash
+            // Set active tab based on URL hash or localStorage
             const hash = window.location.hash.substring(1);
+            const savedTab = localStorage.getItem('activeStudentTab');
+            
             if (hash) {
                 showTab(hash);
+            } else if (savedTab) {
+                showTab(savedTab);
+            } else {
+                // Default to dashboard
+                showTab('dashboard-overview');
             }
             
             // Auto-dismiss flash messages after 5 seconds

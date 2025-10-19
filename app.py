@@ -942,8 +942,53 @@ def manage_classroom_details(classroom_id):
     if not session.get('teacher_logged_in'):
         flash('Please log in.', 'warning');
         return redirect(url_for('login', role='teacher'))
-    flash(f"Classroom management (ID: {classroom_id}) feature is currently under development.", "info")
-    return redirect(url_for('teacher_dashboard', active_tab='classroom-manager'))
+    
+    teacher_id = session['teacher_id']
+    classroom = Classroom.query.filter_by(id=classroom_id, teacher_id=teacher_id).first_or_404()
+    
+    # Get enrolled students
+    enrolled_students = db.session.query(Student, Enrollment).join(
+        Enrollment, Student.id == Enrollment.student_id
+    ).filter(
+        Enrollment.classroom_id == classroom_id,
+        Enrollment.is_approved == True
+    ).order_by(Student.full_name).all()
+    
+    # Get pending enrollments
+    pending_enrollments = db.session.query(Student, Enrollment).join(
+        Enrollment, Student.id == Enrollment.student_id
+    ).filter(
+        Enrollment.classroom_id == classroom_id,
+        Enrollment.is_approved == False
+    ).order_by(Enrollment.enrolled_at.desc()).all()
+    
+    # Get classroom assignments
+    assignments = Assignment.query.filter_by(classroom_id=classroom_id).order_by(
+        Assignment.created_at.desc()
+    ).all()
+    
+    # Get assignment statistics
+    assignment_stats = []
+    for assignment in assignments:
+        total_students = len(enrolled_students)
+        submissions = Submission.query.filter_by(assignment_id=assignment.id).all()
+        submitted_count = len([s for s in submissions if s.submitted_at])
+        evaluated_count = len([s for s in submissions if s.evaluated_at])
+        
+        assignment_stats.append({
+            'assignment': assignment,
+            'total_students': total_students,
+            'submitted_count': submitted_count,
+            'evaluated_count': evaluated_count,
+            'submission_rate': (submitted_count / total_students * 100) if total_students > 0 else 0
+        })
+    
+    return render_template('classroom_manager.html', 
+                         classroom=classroom,
+                         enrolled_students=enrolled_students,
+                         pending_enrollments=pending_enrollments,
+                         assignment_stats=assignment_stats,
+                         current_time=datetime.utcnow())
 
 
 @app.route('/teacher/classroom/<int:classroom_id>/remove_student/<int:student_id>', methods=['POST'])
@@ -951,8 +996,29 @@ def remove_student_from_classroom(classroom_id, student_id):
     if not session.get('teacher_logged_in'):
         flash('Authentication required.', 'danger');
         return redirect(url_for('login', role='teacher'))
-    flash("Student removal feature is part of classroom management, which is under development.", "info")
-    return redirect(url_for('teacher_dashboard', active_tab='classroom-manager'))
+    
+    teacher_id = session['teacher_id']
+    classroom = Classroom.query.filter_by(id=classroom_id, teacher_id=teacher_id).first_or_404()
+    
+    # Find and remove the enrollment
+    enrollment = Enrollment.query.filter_by(
+        classroom_id=classroom_id, 
+        student_id=student_id
+    ).first()
+    
+    if enrollment:
+        student_name = enrollment.student.full_name
+        db.session.delete(enrollment)
+        try:
+            db.session.commit()
+            flash(f'Student {student_name} has been removed from {classroom.name}.', 'success')
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error removing student: {str(e)}', 'danger')
+    else:
+        flash('Student not found in this classroom.', 'warning')
+    
+    return redirect(url_for('manage_classroom_details', classroom_id=classroom_id))
 
 
 # Student Routes
@@ -1039,16 +1105,26 @@ def student_dashboard():
     )
     
     # Get available assignments (not submitted and not overdue)
-    available_assignments = Assignment.query.filter(
-        Assignment.classroom_id.in_(enrolled_classrooms_ids) if enrolled_classrooms_ids else False,
-        Assignment.submission_deadline > datetime.utcnow(),
-        ~Assignment.id.in_(submitted_as_ids)
-    ).order_by(Assignment.submission_deadline.asc()).all()
+    available_assignments = []
+    if enrolled_classrooms_ids:
+        try:
+            available_assignments = Assignment.query.filter(
+                Assignment.classroom_id.in_(enrolled_classrooms_ids),
+                Assignment.submission_deadline > datetime.utcnow(),
+                ~Assignment.id.in_(submitted_as_ids)
+            ).order_by(Assignment.submission_deadline.asc()).all()
+        except Exception as e:
+            print(f"Error fetching available assignments: {e}")
+            available_assignments = []
     
     # Get recent submissions with assignment details
-    recent_submissions = Submission.query.filter_by(student_id=student.id) \
-        .filter(Submission.submitted_at != None) \
-        .join(Assignment).order_by(Submission.submitted_at.desc()).limit(5).all()
+    try:
+        recent_submissions = Submission.query.filter_by(student_id=student.id) \
+            .filter(Submission.submitted_at != None) \
+            .join(Assignment).order_by(Submission.submitted_at.desc()).limit(5).all()
+    except Exception as e:
+        print(f"Error fetching recent submissions: {e}")
+        recent_submissions = []
     
     # Calculate statistics
     total_submissions = student.submissions.filter(Submission.submitted_at != None).count()
@@ -1062,8 +1138,8 @@ def student_dashboard():
     
     avg_score = 0
     if evaluated_subs:
-        total_score = sum(sub.display_score for sub in evaluated_subs)
-        total_max = sum(sub.assignment.max_score for sub in evaluated_subs)
+        total_score = sum(sub.display_score or 0 for sub in evaluated_subs)
+        total_max = sum(sub.assignment.max_score or 0 for sub in evaluated_subs)
         avg_score = (total_score / total_max * 100) if total_max > 0 else 0
     
     return render_template('student_dashboard.html', 
@@ -1131,10 +1207,10 @@ def submit_assignment(assignment_id):
     existing_submission = Submission.query.filter_by(student_id=student_id, assignment_id=assignment_id).first()
     if existing_submission and existing_submission.submitted_at:
         flash('You have already submitted this assignment.', 'info');
-        return redirect(url_for('student_assignments_list'))
+        return redirect(url_for('student_dashboard'))
     if assignment.submission_deadline < datetime.utcnow():
         flash('The deadline for this assignment has passed.', 'danger');
-        return redirect(url_for('student_assignments_list'))
+        return redirect(url_for('student_dashboard'))
     if request.method == 'POST':
         answer_text = request.form.get('answer_text', '').strip()
         if not answer_text:
@@ -1147,10 +1223,22 @@ def submit_assignment(assignment_id):
             try:
                 db.session.commit();
                 flash('Assignment submitted successfully!', 'success');
-                return redirect(url_for('student_assignments_list'))
+                return redirect(url_for('student_dashboard'))
             except Exception as e:
                 db.session.rollback(); flash(f'Error submitting assignment: {str(e)}', 'danger')
     return render_template('submit_assignment.html', assignment=assignment, student=student)
+
+
+@app.route('/student/assignment/submission/<int:submission_id>/details')
+def view_submission_details(submission_id):
+    if not session.get('student_logged_in'):
+        flash('Please log in to view submission details.', 'warning')
+        return redirect(url_for('login', role='student'))
+    
+    student_id = session['student_id']
+    submission = Submission.query.filter_by(id=submission_id, student_id=student_id).first_or_404()
+    
+    return render_template('submission_details.html', submission=submission)
 
 
 @app.route('/student/report/pdf')
@@ -1234,47 +1322,6 @@ def student_report_pdf():
                      mimetype='application/pdf')
 
 
-@app.route('/student/assignments')
-def student_assignments_list():
-    if not session.get('student_logged_in'):
-        flash('Please log in as a student.', 'warning')
-        return redirect(url_for('login', role='student'))
-    
-    student = Student.query.get_or_404(session['student_id'])
-    enrolled_classrooms_ids = [e.classroom_id for e in student.enrollments.all()]
-    
-    # Get all assignments from enrolled classrooms
-    all_assignments = Assignment.query.filter(
-        Assignment.classroom_id.in_(enrolled_classrooms_ids)
-    ).order_by(Assignment.submission_deadline.desc()).all()
-    
-    # Get student's submissions
-    student_submissions = {s.assignment_id: s for s in student.submissions.all()}
-    
-    # Categorize assignments
-    available_assignments = []
-    submitted_assignments = []
-    overdue_assignments = []
-    
-    for assignment in all_assignments:
-        submission = student_submissions.get(assignment.id)
-        
-        if submission and submission.submitted_at:
-            submitted_assignments.append({
-                'assignment': assignment,
-                'submission': submission
-            })
-        elif assignment.submission_deadline < datetime.utcnow():
-            overdue_assignments.append(assignment)
-        else:
-            available_assignments.append(assignment)
-    
-    return render_template('student_assignments_list.html',
-                         student=student,
-                         available_assignments=available_assignments,
-                         submitted_assignments=submitted_assignments,
-                         overdue_assignments=overdue_assignments)
-
 
 @app.route('/student/profile')
 def student_profile():
@@ -1341,6 +1388,33 @@ def student_logout():
 
 
 # Approval Routes
+@app.route('/teacher/approve_enrollment/<int:enrollment_id>')
+def approve_enrollment(enrollment_id):
+    if not session.get('teacher_logged_in'):
+        flash('Please log in as a teacher.', 'warning')
+        return redirect(url_for('login', role='teacher'))
+    
+    teacher_id = session['teacher_id']
+    enrollment = Enrollment.query.get_or_404(enrollment_id)
+    
+    # Verify teacher owns the classroom
+    if enrollment.classroom.teacher_id != teacher_id:
+        flash('Permission denied.', 'danger')
+        return redirect(url_for('teacher_dashboard'))
+    
+    enrollment.is_approved = True
+    enrollment.approved_at = datetime.utcnow()
+    
+    try:
+        db.session.commit()
+        flash(f'Student {enrollment.student.full_name} approved for {enrollment.classroom.name}!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error approving student: {str(e)}', 'danger')
+    
+    return redirect(url_for('manage_classroom_details', classroom_id=enrollment.classroom_id))
+
+
 @app.route('/teacher/approve_student/<int:enrollment_id>')
 def approve_student_enrollment(enrollment_id):
     if not session.get('teacher_logged_in'):
@@ -1395,6 +1469,76 @@ def approve_teacher(teacher_id):
         flash(f'Error approving teacher: {e}', 'danger')
     
     return redirect(url_for('admin_dashboard'))
+
+
+@app.route('/admin/student/<int:student_id>/profile')
+def admin_view_student_profile(student_id):
+    if not session.get('admin_logged_in'):
+        flash('Please log in as admin.', 'warning')
+        return redirect(url_for('login', role='admin'))
+    
+    admin = Admin.query.get_or_404(session['admin_id'])
+    student = Student.query.get_or_404(student_id)
+    
+    # Check if university admin can view this student
+    if admin.role == 'university_admin' and admin.university != student.university:
+        flash('Permission denied.', 'danger')
+        return redirect(url_for('admin_dashboard'))
+    
+    # Get student statistics
+    total_submissions = student.submissions.filter(Submission.submitted_at != None).count()
+    evaluated_submissions = student.submissions.filter(Submission.evaluated_at != None).count()
+    enrolled_classrooms_count = student.enrollments.filter(Enrollment.is_approved == True).count()
+    
+    # Get recent submissions
+    recent_submissions = student.submissions.filter(Submission.submitted_at != None).join(Assignment).order_by(Submission.submitted_at.desc()).limit(5).all()
+    
+    stats = {
+        'total_submissions': total_submissions,
+        'evaluated_submissions': evaluated_submissions,
+        'enrolled_classrooms_count': enrolled_classrooms_count
+    }
+    
+    return render_template('admin_student_profile.html', 
+                         student=student, 
+                         admin=admin,
+                         stats=stats, 
+                         recent_submissions=recent_submissions)
+
+
+@app.route('/admin/teacher/<int:teacher_id>/profile')
+def admin_view_teacher_profile(teacher_id):
+    if not session.get('admin_logged_in'):
+        flash('Please log in as admin.', 'warning')
+        return redirect(url_for('login', role='admin'))
+    
+    admin = Admin.query.get_or_404(session['admin_id'])
+    teacher = Teacher.query.get_or_404(teacher_id)
+    
+    # Check if university admin can view this teacher
+    if admin.role == 'university_admin' and admin.university != teacher.university:
+        flash('Permission denied.', 'danger')
+        return redirect(url_for('admin_dashboard'))
+    
+    # Get teacher statistics
+    total_classrooms = teacher.classrooms.count()
+    total_assignments = teacher.assignments.count()
+    total_students = sum(c.enrollments_count for c in teacher.classrooms.all())
+    
+    # Get recent assignments
+    recent_assignments = teacher.assignments.order_by(Assignment.created_at.desc()).limit(5).all()
+    
+    stats = {
+        'total_classrooms': total_classrooms,
+        'total_assignments': total_assignments,
+        'total_students': total_students
+    }
+    
+    return render_template('admin_teacher_profile.html', 
+                         teacher=teacher, 
+                         admin=admin,
+                         stats=stats, 
+                         recent_assignments=recent_assignments)
 
 
 # Profile Management Routes
@@ -1624,6 +1768,36 @@ def uploaded_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 
+@app.route('/teacher/submissions/assignment/<int:assignment_id>')
+def teacher_submissions_by_assignment(assignment_id):
+    if not session.get('teacher_logged_in'):
+        flash('Please log in as a teacher.', 'warning')
+        return redirect(url_for('login', role='teacher'))
+    
+    teacher_id = session['teacher_id']
+    assignment = Assignment.query.filter_by(id=assignment_id, teacher_id=teacher_id).first_or_404()
+    
+    # Get all submissions for this assignment
+    submissions = Submission.query.filter_by(assignment_id=assignment_id).join(Student).order_by(
+        Submission.submitted_at.desc().nullslast(),
+        Student.full_name
+    ).all()
+    
+    # Get enrolled students who haven't submitted
+    enrolled_students = db.session.query(Student).join(Enrollment).filter(
+        Enrollment.classroom_id == assignment.classroom_id,
+        Enrollment.is_approved == True
+    ).all()
+    
+    submitted_student_ids = {s.student_id for s in submissions if s.submitted_at}
+    not_submitted_students = [s for s in enrolled_students if s.id not in submitted_student_ids]
+    
+    return render_template('assignment_submissions.html',
+                         assignment=assignment,
+                         submissions=submissions,
+                         not_submitted_students=not_submitted_students)
+
+
 # Analytics Routes
 @app.route('/teacher/analytics')
 def teacher_analytics():
@@ -1746,16 +1920,32 @@ def view_submissions(assignment_id):
 
 
 @app.route('/teacher/submission/<int:submission_id>/view_details')
-def view_submission_details(submission_id):
-    if not session.get('teacher_logged_in'): return redirect(url_for('login', role='teacher'))
+def teacher_view_submission_details(submission_id):
+    if not session.get('teacher_logged_in'): 
+        return redirect(url_for('login', role='teacher'))
+    
     submission = Submission.query.get_or_404(submission_id)
     assignment = Assignment.query.get_or_404(submission.assignment_id)
+    
     if assignment.teacher_id != session.get('teacher_id'):
-        flash("Permission denied.", "danger");
+        flash("Permission denied.", "danger")
         return redirect(url_for('teacher_dashboard'))
-    flash(f"Detailed view for submission ID {submission.id} is under development. Key details are in Evaluation Hub.",
-          "info")
-    return redirect(url_for('teacher_dashboard', filter_assignment_id=assignment.id, active_tab='evaluation-hub'))
+    
+    # Get student information
+    student = submission.student
+    
+    # Get other submissions by this student for comparison
+    other_submissions = Submission.query.filter(
+        Submission.student_id == student.id,
+        Submission.id != submission.id,
+        Submission.submitted_at != None
+    ).join(Assignment).order_by(Submission.submitted_at.desc()).limit(5).all()
+    
+    return render_template('teacher_submission_details.html',
+                         submission=submission,
+                         assignment=assignment,
+                         student=student,
+                         other_submissions=other_submissions)
 
 
 @app.route('/teacher/assignment/<int:assignment_id>/analytics')
