@@ -746,36 +746,6 @@
     </style>
 </head>
 <body>
-    <!-- Flash Messages -->
-    {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-    <div style="position: fixed; top: 20px; right: 20px; z-index: 9999;">
-        {% for category, message in messages %}
-        <div class="alert alert-{{ category if category != 'message' else 'info' }} alert-dismissible fade show" role="alert" style="margin-bottom: 10px; min-width: 300px;">
-            {{ message }}
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-        {% endfor %}
-    </div>
-    <style>
-        .alert {
-            padding: 12px 20px;
-            border-radius: 8px;
-            border-left: 4px solid;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            box-shadow: var(--shadow-md);
-        }
-        .alert-success { background-color: #d4edda; border-color: var(--success); color: #155724; }
-        .alert-danger { background-color: #f8d7da; border-color: var(--danger); color: #721c24; }
-        .alert-warning { background-color: #fff3cd; border-color: var(--warning); color: #856404; }
-        .alert-info { background-color: #d1ecf1; border-color: var(--primary-blue); color: #0c5460; }
-        .btn-close { background: none; border: none; font-size: 1.2rem; cursor: pointer; margin-left: auto; }
-    </style>
-    {% endif %}
-    {% endwith %}
-
     <!-- Header/Navigation -->
     <header>
         <div class="container">
@@ -790,17 +760,17 @@
                     </a>
                 </div>
                 <ul class="nav-links">
-                    <li><a href="#" class="active">Dashboard</a></li>
-                    <li><a href="#">My Classes</a></li>
-                    <li><a href="#">Assignments</a></li>
-                    <li><a href="#">Performance</a></li>
+                    <li><a href="{{ url_for('student_dashboard') }}" class="active">Dashboard</a></li>
+                    <li><a href="{{ url_for('student_assignments_list') }}">Assignments</a></li>
+                    <li><a href="{{ url_for('student_join_classroom') }}">Join Class</a></li>
+                    <li><a href="{{ url_for('student_logout') }}">Logout</a></li>
                 </ul>
                 <div class="user-menu">
                     <div class="user-info">
-                        <div class="user-name">{{ student.full_name if student else 'Student' }}</div>
+                        <div class="user-name">{{ student.full_name }}</div>
                         <div class="user-role">Student</div>
                     </div>
-                    <div class="user-avatar">{{ (student.full_name[0] if student and student.full_name else 'S')|upper }}</div>
+                    <div class="user-avatar">{{ student.full_name[0].upper() }}</div>
                 </div>
             </nav>
         </div>
@@ -829,10 +799,8 @@
                     <span class="menu-text">Performance Tracker</span>
                 </li>
                 <li class="menu-item">
-                    <a href="{{ url_for('student_logout') }}" style="color: inherit; text-decoration: none; display: flex; align-items: center; gap: 12px;">
-                        <i class="fas fa-sign-out-alt"></i>
-                        <span class="menu-text">Logout</span>
-                    </a>
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span class="menu-text">Logout</span>
                 </li>
             </ul>
         </div>
@@ -843,9 +811,9 @@
             <div id="student-dashboard" class="tab-content">
                 <div class="page-header">
                     <h1 class="page-title">Student Dashboard</h1>
-                    <a href="{{ url_for('student_join_classroom') }}" class="btn btn-green">
+                    <button class="btn btn-green">
                         <i class="fas fa-plus"></i> Join Class
-                    </a>
+                    </button>
                 </div>
 
                 <!-- Dashboard Widgets -->
@@ -901,7 +869,7 @@
                                 <div class="card-subtitle">{{ assignment.classroom.name }} - Due: {{ assignment.submission_deadline.strftime('%b %d') }}</div>
                             </div>
                             <div class="card-body">
-                                <p>{{ assignment.instructions[:120] }}{% if assignment.instructions|length > 120 %}...{% endif %}</p>
+                                <p>{{ assignment.instructions[:100] }}{% if assignment.instructions|length > 100 %}...{% endif %}</p>
                                 <div style="margin-top: 15px;">
                                     <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
                                         <span>Max Score:</span>
@@ -941,92 +909,49 @@
                 </div>
 
                 <div class="card-grid">
-                    <div class="card">
-                        <div class="card-header">
-                            <div class="card-title">CS101 - Intro to Programming</div>
-                            <div class="card-subtitle">Instructor: Prof. Sarah Johnson</div>
-                        </div>
-                        <div class="card-body">
-                            <p>Introduction to programming concepts using Python. Learn variables, loops, functions, and data structures.</p>
-                            <div style="margin-top: 15px;">
-                                <div style="display: flex; gap: 15px; flex-wrap: wrap;">
-                                    <div>
-                                        <div style="font-size: 0.9rem; color: var(--text-light);">Assignments</div>
-                                        <div style="font-weight: 700;">5/8</div>
-                                    </div>
-                                    <div>
-                                        <div style="font-size: 0.9rem; color: var(--text-light);">Avg. Grade</div>
-                                        <div style="font-weight: 700;">92%</div>
-                                    </div>
-                                    <div>
-                                        <div style="font-size: 0.9rem; color: var(--text-light);">Class Rank</div>
-                                        <div style="font-weight: 700;">4/45</div>
+                    {% if enrolled_classrooms %}
+                        {% for classroom in enrolled_classrooms %}
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="card-title">{{ classroom.name }}</div>
+                                <div class="card-subtitle">Instructor: {{ classroom.teacher.full_name }}</div>
+                            </div>
+                            <div class="card-body">
+                                <p>{{ classroom.description if classroom.description else 'No description available.' }}</p>
+                                <div style="margin-top: 15px;">
+                                    <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                                        <div>
+                                            <div style="font-size: 0.9rem; color: var(--text-light);">Department</div>
+                                            <div style="font-weight: 700;">{{ classroom.department }}</div>
+                                        </div>
+                                        <div>
+                                            <div style="font-size: 0.9rem; color: var(--text-light);">Year</div>
+                                            <div style="font-weight: 700;">{{ classroom.year }}</div>
+                                        </div>
+                                        <div>
+                                            <div style="font-size: 0.9rem; color: var(--text-light);">Students</div>
+                                            <div style="font-weight: 700;">{{ classroom.enrollments.count() }}</div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                        <div class="card-footer">
-                            <button class="btn btn-sm btn-green">View Assignments</button>
-                        </div>
-                    </div>
-
-                    <div class="card">
-                        <div class="card-header">
-                            <div class="card-title">CS205 - Web Development</div>
-                            <div class="card-subtitle">Instructor: Prof. Michael Brown</div>
-                        </div>
-                        <div class="card-body">
-                            <p>Building modern web applications with HTML, CSS, and JavaScript. Learn responsive design and interactivity.</p>
-                            <div style="margin-top: 15px;">
-                                <div style="display: flex; gap: 15px; flex-wrap: wrap;">
-                                    <div>
-                                        <div style="font-size: 0.9rem; color: var(--text-light);">Assignments</div>
-                                        <div style="font-weight: 700;">2/5</div>
-                                    </div>
-                                    <div>
-                                        <div style="font-size: 0.9rem; color: var(--text-light);">Avg. Grade</div>
-                                        <div style="font-weight: 700;">88%</div>
-                                    </div>
-                                    <div>
-                                        <div style="font-size: 0.9rem; color: var(--text-light);">Class Rank</div>
-                                        <div style="font-weight: 700;">7/42</div>
-                                    </div>
-                                </div>
+                            <div class="card-footer">
+                                <a href="{{ url_for('student_assignments_list') }}" class="btn btn-sm btn-green">View Assignments</a>
                             </div>
                         </div>
-                        <div class="card-footer">
-                            <button class="btn btn-sm btn-green">View Assignments</button>
-                        </div>
-                    </div>
-
-                    <div class="card">
-                        <div class="card-header">
-                            <div class="card-title">CS301 - Algorithms</div>
-                            <div class="card-subtitle">Instructor: Prof. James Wilson</div>
-                        </div>
-                        <div class="card-body">
-                            <p>Study of fundamental algorithms and their complexity. Sorting, searching, graph algorithms, and optimization.</p>
-                            <div style="margin-top: 15px;">
-                                <div style="display: flex; gap: 15px; flex-wrap: wrap;">
-                                    <div>
-                                        <div style="font-size: 0.9rem; color: var(--text-light);">Assignments</div>
-                                        <div style="font-weight: 700;">1/6</div>
-                                    </div>
-                                    <div>
-                                        <div style="font-size: 0.9rem; color: var(--text-light);">Avg. Grade</div>
-                                        <div style="font-weight: 700;">85%</div>
-                                    </div>
-                                    <div>
-                                        <div style="font-size: 0.9rem; color: var(--text-light);">Class Rank</div>
-                                        <div style="font-weight: 700;">12/38</div>
-                                    </div>
-                                </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="card">
+                            <div class="card-body" style="text-align: center; padding: 40px;">
+                                <i class="fas fa-school" style="font-size: 3rem; color: var(--text-light); margin-bottom: 15px;"></i>
+                                <h3>No Classrooms Yet</h3>
+                                <p>You haven't joined any classrooms. Use an invite code to join your first classroom!</p>
+                                <a href="{{ url_for('student_join_classroom') }}" class="btn btn-green" style="margin-top: 15px;">
+                                    <i class="fas fa-plus"></i> Join Classroom
+                                </a>
                             </div>
                         </div>
-                        <div class="card-footer">
-                            <button class="btn btn-sm btn-green">View Assignments</button>
-                        </div>
-                    </div>
+                    {% endif %}
                 </div>
             </div>
 
@@ -1375,15 +1300,6 @@
             if (hash) {
                 showTab(hash);
             }
-            
-            // Auto-dismiss flash messages after 5 seconds
-            setTimeout(function() {
-                document.querySelectorAll('.alert').forEach(function(alert) {
-                    if (alert.querySelector('.btn-close')) {
-                        alert.querySelector('.btn-close').click();
-                    }
-                });
-            }, 5000);
         });
     </script>
 </body>

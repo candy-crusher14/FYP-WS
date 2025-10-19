@@ -1,4 +1,5 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash, send_file
+from flask import Flask, render_template, request, redirect, url_for, session, flash, send_file, send_from_directory
+from werkzeug.utils import secure_filename
 from flask_sqlalchemy import SQLAlchemy
 import sys
 import string
@@ -38,6 +39,19 @@ nltk.download('vader_lexicon', quiet=True)
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'default_secret_key_for_dev_123!@#')
 
+# File upload configuration
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+app.config['UPLOAD_FOLDER'] = 'uploads'
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'pdf', 'doc', 'docx'}
+
+# Create upload directories
+import os
+for folder in ['uploads/profiles', 'uploads/documents']:
+    os.makedirs(folder, exist_ok=True)
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
 # Removed the problematic session clearing block that was here
 print('changes')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///exam_system.db')
@@ -48,8 +62,10 @@ db = SQLAlchemy(app)
 
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
 if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
-    gemini_model = genai.GenerativeModel('gemini-pro')
+    # genai.configure(api_key=GEMINI_API_KEY)
+    
+    # gemini_model = genai.GenerativeModel('gemini-pro')
+    gemini_model = None
 else:
     gemini_model = None
     print("Warning: GEMINI_API_KEY not found. Gemini evaluation will not be available.")
@@ -57,6 +73,7 @@ else:
 DEPARTMENTS = ('Computer Science', 'Information Technology')
 YEARS = (1, 2, 3, 4)
 SEMESTERS_LIST = [f"Semester {i}" for i in range(1, 9)]
+UNIVERSITIES = ('University of Mirpur Khas', 'University of Sindh')
 
 
 # Database Models
@@ -65,6 +82,11 @@ class Admin(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     password = db.Column(db.String(120), nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=True)
+    full_name = db.Column(db.String(120), nullable=True)
+    university = db.Column(db.String(100), nullable=True)
+    role = db.Column(db.String(50), default='admin')  # 'admin' or 'university_admin'
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
 class Student(db.Model):
@@ -74,11 +96,16 @@ class Student(db.Model):
     password = db.Column(db.String(120), nullable=False)
     full_name = db.Column(db.String(120))
     email = db.Column(db.String(120), unique=True)
+    roll_number = db.Column(db.String(50), unique=True, nullable=False)
+    university = db.Column(db.String(100), nullable=False)
     department = db.Column(db.String(80), nullable=False)
     year = db.Column(db.Integer, nullable=False)
+    profile_image = db.Column(db.String(200), nullable=True)
+    is_approved = db.Column(db.Boolean, default=True)  # Students are auto-approved
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     submissions = db.relationship('Submission', backref='student', lazy='dynamic')
     enrollments = db.relationship('Enrollment', backref='student', lazy='dynamic', cascade="all, delete-orphan")
+    documents = db.relationship('StudentDocument', backref='student', lazy='dynamic', cascade="all, delete-orphan")
 
 
 class Teacher(db.Model):
@@ -88,11 +115,17 @@ class Teacher(db.Model):
     password = db.Column(db.String(120), nullable=False)
     full_name = db.Column(db.String(120))
     email = db.Column(db.String(120), unique=True)
+    university = db.Column(db.String(100), nullable=False)
+    profile_image = db.Column(db.String(200), nullable=True)
+    is_approved = db.Column(db.Boolean, default=False)  # Teachers need admin approval
+    approved_by = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=True)
+    approved_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     classrooms = db.relationship('Classroom', backref='teacher', lazy='dynamic', cascade="all, delete-orphan")
     assignments = db.relationship('Assignment', backref='teacher', lazy='dynamic', cascade="all, delete-orphan")
     overrides = db.relationship('Submission', foreign_keys='Submission.overridden_by', backref='overriding_teacher',
                                 lazy='dynamic')
+    documents = db.relationship('TeacherDocument', backref='teacher', lazy='dynamic', cascade="all, delete-orphan")
 
 
 def generate_invite_code():
@@ -106,6 +139,7 @@ class Classroom(db.Model):
     teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=False)
     department = db.Column(db.String(80), nullable=False)
     year = db.Column(db.Integer, nullable=False)
+    semester = db.Column(db.String(20), nullable=True)
     description = db.Column(db.Text, nullable=True)
     invite_code = db.Column(db.String(8), unique=True, nullable=False, default=generate_invite_code)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -146,7 +180,6 @@ class Assignment(db.Model):
     instructions = db.Column(db.Text, nullable=False)
     submission_deadline = db.Column(db.DateTime, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    semester = db.Column(db.String(50), nullable=False)
     evaluation_method = db.Column(db.String(50), nullable=False, default='gemini')
     expected_answer = db.Column(db.Text, nullable=True)
     max_score = db.Column(db.Float, default=10.0)
@@ -210,7 +243,30 @@ class Enrollment(db.Model):
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
     classroom_id = db.Column(db.Integer, db.ForeignKey('classrooms.id'), nullable=False)
     enrolled_at = db.Column(db.DateTime, default=datetime.utcnow)
+    is_approved = db.Column(db.Boolean, default=False)  # Teacher approval required
+    approved_by = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=True)
+    approved_at = db.Column(db.DateTime, nullable=True)
     __table_args__ = (db.UniqueConstraint('student_id', 'classroom_id', name='_enrollment_stud_classroom_uc'),)
+
+
+class StudentDocument(db.Model):
+    __tablename__ = 'student_documents'
+    id = db.Column(db.Integer, primary_key=True)
+    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
+    document_type = db.Column(db.String(50), nullable=False)  # 'id_card', 'verification_photo', 'other'
+    file_path = db.Column(db.String(200), nullable=False)
+    original_filename = db.Column(db.String(200), nullable=False)
+    uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class TeacherDocument(db.Model):
+    __tablename__ = 'teacher_documents'
+    id = db.Column(db.Integer, primary_key=True)
+    teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=False)
+    document_type = db.Column(db.String(50), nullable=False)  # 'id_card', 'verification_photo', 'certificate', 'other'
+    file_path = db.Column(db.String(200), nullable=False)
+    original_filename = db.Column(db.String(200), nullable=False)
+    uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
 # Helper Functions
@@ -332,13 +388,14 @@ def dashboard():
 def admin_login():
     if request.method == 'POST':
         username = request.form['username']
-        password = hash_password(request.form['password'])
+        password = request.form['password']  # Don't hash here, compare with stored hash
         admin_code = request.form.get('admin_code', '')
         if admin_code != os.environ.get('ADMIN_SECRET', 'admin123'):
             flash('Invalid admin code', 'danger')
             return render_template('login.html', error='Invalid admin code', default_role='admin')
-        admin = Admin.query.filter_by(username=username, password=password).first()
-        if admin:
+        
+        admin = Admin.query.filter_by(username=username).first()
+        if admin and admin.password == hash_password(password):
             session['admin_logged_in'], session['admin_id'] = True, admin.id
             flash('Admin login successful!', 'success')
             return redirect(url_for('admin_dashboard'))
@@ -351,12 +408,41 @@ def admin_dashboard():
     if not session.get('admin_logged_in'):
         flash('Please log in as admin.', 'warning');
         return redirect(url_for('login', role='admin'))
-    stats = {
-        'students': Student.query.count(), 'teachers': Teacher.query.count(),
-        'classrooms': Classroom.query.count(), 'assignments': Assignment.query.count(),
-        'recent_assignments': Assignment.query.order_by(Assignment.created_at.desc()).limit(5).all()
-    }
-    return render_template('admin_dashboard.html', stats=stats)
+    
+    admin = Admin.query.get_or_404(session['admin_id'])
+    
+    # Filter data based on admin type
+    if admin.role == 'university_admin' and admin.university:
+        # University admin sees only their university's data
+        students = Student.query.filter_by(university=admin.university)
+        teachers = Teacher.query.filter_by(university=admin.university)
+        pending_teachers = teachers.filter(Teacher.is_approved == False).order_by(Teacher.created_at.desc()).all()
+        
+        # Get classrooms from teachers in this university
+        teacher_ids = [t.id for t in teachers.all()]
+        classrooms = Classroom.query.filter(Classroom.teacher_id.in_(teacher_ids)) if teacher_ids else Classroom.query.filter(False)
+        
+        # Get assignments from classrooms in this university
+        classroom_ids = [c.id for c in classrooms.all()]
+        assignments = Assignment.query.filter(Assignment.classroom_id.in_(classroom_ids)) if classroom_ids else Assignment.query.filter(False)
+        
+        stats = {
+            'students': students.count(),
+            'teachers': teachers.count(),
+            'classrooms': classrooms.count(),
+            'assignments': assignments.count(),
+            'recent_assignments': assignments.order_by(Assignment.created_at.desc()).limit(5).all()
+        }
+    else:
+        # System admin sees all data
+        stats = {
+            'students': Student.query.count(), 'teachers': Teacher.query.count(),
+            'classrooms': Classroom.query.count(), 'assignments': Assignment.query.count(),
+            'recent_assignments': Assignment.query.order_by(Assignment.created_at.desc()).limit(5).all()
+        }
+        pending_teachers = Teacher.query.filter(Teacher.is_approved == False).order_by(Teacher.created_at.desc()).all()
+    
+    return render_template('admin_dashboard.html', stats=stats, pending_teachers=pending_teachers, admin=admin)
 
 
 @app.route('/admin/logout')
@@ -376,8 +462,9 @@ def teacher_register():
         confirm_password = request.form.get('confirm_password', '')
         full_name = request.form.get('full_name', '').strip()
         email = request.form.get('email', '').strip().lower()
+        university = request.form.get('university')
         error = None
-        if not all([username, password, confirm_password, full_name, email]):
+        if not all([username, password, confirm_password, full_name, email, university]):
             error = 'All fields are required.'
         elif password != confirm_password:
             error = 'Passwords do not match.'
@@ -387,14 +474,16 @@ def teacher_register():
         elif Teacher.query.filter(func.lower(Teacher.email) == func.lower(email)).first() or \
                 Student.query.filter(func.lower(Student.email) == func.lower(email)).first():
             error = 'Email already registered.'
+        elif university not in UNIVERSITIES:
+            error = 'Invalid university.'
         else:
-            new_teacher = Teacher(username=username, password=hash_password(password), full_name=full_name, email=email)
+            new_teacher = Teacher(username=username, password=hash_password(password), full_name=full_name, 
+                                email=email, university=university, is_approved=False)
             try:
                 db.session.add(new_teacher);
                 db.session.commit()
-                session['teacher_logged_in'], session['teacher_id'] = True, new_teacher.id
-                flash('Teacher registration successful! Welcome.', 'success');
-                return redirect(url_for('teacher_dashboard'))
+                flash(f'Hi {full_name}! Your teacher account is pending approval from {university} admin. Please wait for verification.', 'info');
+                return redirect(url_for('index'))
             except IntegrityError as ie:
                 db.session.rollback();
                 error = f'Registration failed: Username or email might already exist.';
@@ -402,16 +491,19 @@ def teacher_register():
             except Exception as e:
                 db.session.rollback(); error = f'Registration error: {e}'; app.logger.error(f"Exception: {e}")
         if error: flash(error, 'danger')
-    return render_template('teacher_register.html')
+    return render_template('teacher_register.html', universities=UNIVERSITIES)
 
 
 @app.route('/teacher/login', methods=['GET', 'POST'])
 def teacher_login():
     if request.method == 'POST':
         username = request.form['username']
-        password = hash_password(request.form['password'])
-        teacher = Teacher.query.filter_by(username=username, password=password).first()
-        if teacher:
+        password = request.form['password']
+        teacher = Teacher.query.filter_by(username=username).first()
+        if teacher and teacher.password == hash_password(password):
+            if not teacher.is_approved:
+                flash(f'Your account is pending approval from {teacher.university} admin. Please wait for verification.', 'warning')
+                return render_template('login.html', default_role='teacher')
             session['teacher_logged_in'], session['teacher_id'] = True, teacher.id
             flash('Teacher login successful!', 'success');
             return redirect(url_for('teacher_dashboard'))
@@ -476,6 +568,13 @@ def teacher_dashboard():
 
     pending_submissions = pending_submissions_query.order_by(Submission.submitted_at.desc()).all()
     completed_submissions = completed_submissions_query.order_by(Submission.evaluated_at.desc()).all()
+    
+    # Get pending student enrollments for teacher's classrooms
+    classroom_ids = [c.id for c in classrooms]
+    pending_enrollments = Enrollment.query.filter(
+        Enrollment.classroom_id.in_(classroom_ids),
+        Enrollment.is_approved == False
+    ).join(Student).join(Classroom).order_by(Enrollment.enrolled_at.desc()).all()
 
     return render_template('teacher_dashboard.html',
                            teacher=teacher, classrooms=classrooms,
@@ -486,6 +585,7 @@ def teacher_dashboard():
                            pending_evaluations=len(pending_submissions),
                            pending_submissions=pending_submissions,
                            completed_submissions=completed_submissions,
+                           pending_enrollments=pending_enrollments,
                            current_filter_classroom_id=filter_classroom_id,
                            current_filter_assignment_id=filter_assignment_id,
                            active_tab_on_load=active_tab_on_load
@@ -501,9 +601,10 @@ def create_classroom():
     name = request.form.get('name', '').strip()
     department = request.form.get('department')
     year_str = request.form.get('year')
+    semester = request.form.get('semester', '').strip()
     description = request.form.get('description', '').strip()
-    if not name or not department or not year_str:
-        flash('Classroom name, department, and year are required.', 'danger')
+    if not name or not department or not year_str or not semester:
+        flash('Classroom name, department, year, and semester are required.', 'danger')
     else:
         try:
             year = int(year_str)
@@ -513,7 +614,7 @@ def create_classroom():
                 flash('Invalid department selected.', 'danger')
             else:
                 new_classroom = Classroom(name=name, teacher_id=teacher_id, department=department, year=year,
-                                          description=description)
+                                          semester=semester, description=description)
                 try:
                     db.session.add(new_classroom);
                     db.session.commit()
@@ -539,12 +640,11 @@ def create_assignment():
     classroom_id_str = request.form.get('classroom_id')
     instructions = request.form.get('instructions', '').strip()
     deadline_days_str = request.form.get('deadline_days')
-    semester = request.form.get('semester')
     evaluation_method = request.form.get('evaluation_method')
     expected_answer = request.form.get('expected_answer', '').strip()
     max_score_str = request.form.get('max_score')
 
-    if not all([title, classroom_id_str, instructions, deadline_days_str, semester, evaluation_method, max_score_str]):
+    if not all([title, classroom_id_str, instructions, deadline_days_str, evaluation_method, max_score_str]):
         flash('All assignment fields are required.', 'danger')
     else:
         try:
@@ -565,7 +665,7 @@ def create_assignment():
                     submission_deadline = datetime.utcnow() + timedelta(days=deadline_days)
                     new_assignment = Assignment(
                         title=title, classroom_id=classroom_id, teacher_id=teacher_id, instructions=instructions,
-                        submission_deadline=submission_deadline, semester=semester, evaluation_method=evaluation_method,
+                        submission_deadline=submission_deadline, evaluation_method=evaluation_method,
                         expected_answer=expected_answer if evaluation_method == 'expected' else None,
                         max_score=max_score
                     )
@@ -788,10 +888,12 @@ def student_register():
         confirm_password = request.form.get('confirm_password', '')
         full_name = request.form.get('full_name', '').strip()
         email = request.form.get('email', '').strip().lower()
+        roll_number = request.form.get('roll_number', '').strip()
+        university = request.form.get('university')
         department = request.form.get('department')
         year_str = request.form.get('year')
         error = None
-        if not all([username, password, confirm_password, full_name, email, department, year_str]):
+        if not all([username, password, confirm_password, full_name, email, roll_number, university, department, year_str]):
             error = 'All fields are required.'
         elif password != confirm_password:
             error = 'Passwords do not match.'
@@ -801,6 +903,8 @@ def student_register():
         elif Student.query.filter(func.lower(Student.email) == func.lower(email)).first() or \
                 Teacher.query.filter(func.lower(Teacher.email) == func.lower(email)).first():
             error = 'Email already registered.'
+        elif Student.query.filter(func.lower(Student.roll_number) == func.lower(roll_number)).first():
+            error = 'Roll number already registered.'
         else:
             try:
                 year = int(year_str)
@@ -808,14 +912,16 @@ def student_register():
                     error = 'Invalid department.'
                 elif year not in YEARS:
                     error = 'Invalid year.'
+                elif university not in UNIVERSITIES:
+                    error = 'Invalid university.'
                 else:
                     new_student = Student(username=username, password=hash_password(password), full_name=full_name,
-                                          email=email, department=department, year=year)
+                                          email=email, roll_number=roll_number, university=university, 
+                                          department=department, year=year)
                     db.session.add(new_student);
                     db.session.commit()
-                    session['student_logged_in'], session['student_id'] = True, new_student.id
-                    flash('Student registration successful! Welcome.', 'success');
-                    return redirect(url_for('student_dashboard'))
+                    flash(f'Hi {full_name}! Your student account has been created successfully. Welcome to Smart Classroom!', 'success');
+                    return redirect(url_for('index'))
             except ValueError:
                 error = 'Invalid year format.'
             except IntegrityError as ie:
@@ -824,16 +930,16 @@ def student_register():
             except Exception as e:
                 db.session.rollback(); error = f'Registration error: {e}'; app.logger.error(f"Exception: {e}")
         if error: flash(error, 'danger')
-    return render_template('student_register.html', departments=DEPARTMENTS, years=YEARS)
+    return render_template('student_register.html', departments=DEPARTMENTS, years=YEARS, universities=UNIVERSITIES)
 
 
 @app.route('/student/login', methods=['GET', 'POST'])
 def student_login():
     if request.method == 'POST':
         username = request.form['username']
-        password = hash_password(request.form['password'])
-        student = Student.query.filter_by(username=username, password=password).first()
-        if student:
+        password = request.form['password']
+        student = Student.query.filter_by(username=username).first()
+        if student and student.password == hash_password(password):
             session['student_logged_in'], session['student_id'] = True, student.id
             flash('Student login successful!', 'success');
             return redirect(url_for('student_dashboard'))
@@ -847,20 +953,51 @@ def student_dashboard():
         flash('Please log in as a student.', 'warning');
         return redirect(url_for('login', role='student'))
     student = Student.query.get_or_404(session['student_id'])
-    enrolled_classrooms_ids = [e.classroom_id for e in student.enrollments.all()]
-    enrolled_classrooms = Classroom.query.filter(Classroom.id.in_(enrolled_classrooms_ids)).all()
-    submitted_as_ids = db.session.query(Submission.assignment_id).filter(Submission.student_id == student.id,
-                                                                         Submission.submitted_at != None)
+    enrolled_classrooms_ids = [e.classroom_id for e in student.enrollments.filter(Enrollment.is_approved == True).all()]
+    enrolled_classrooms = Classroom.query.filter(Classroom.id.in_(enrolled_classrooms_ids)).all() if enrolled_classrooms_ids else []
+    
+    # Get submitted assignment IDs
+    submitted_as_ids = db.session.query(Submission.assignment_id).filter(
+        Submission.student_id == student.id,
+        Submission.submitted_at != None
+    )
+    
+    # Get available assignments (not submitted and not overdue)
     available_assignments = Assignment.query.filter(
-        Assignment.classroom_id.in_(enrolled_classrooms_ids),
+        Assignment.classroom_id.in_(enrolled_classrooms_ids) if enrolled_classrooms_ids else False,
         Assignment.submission_deadline > datetime.utcnow(),
         ~Assignment.id.in_(submitted_as_ids)
     ).order_by(Assignment.submission_deadline.asc()).all()
+    
+    # Get recent submissions with assignment details
     recent_submissions = Submission.query.filter_by(student_id=student.id) \
         .filter(Submission.submitted_at != None) \
         .join(Assignment).order_by(Submission.submitted_at.desc()).limit(5).all()
-    return render_template('student_dashboard.html', student=student, available_assignments=available_assignments,
-                           recent_submissions=recent_submissions, enrolled_classrooms=enrolled_classrooms)
+    
+    # Calculate statistics
+    total_submissions = student.submissions.filter(Submission.submitted_at != None).count()
+    evaluated_submissions = student.submissions.filter(Submission.evaluated_at != None).count()
+    
+    # Calculate average score
+    evaluated_subs = student.submissions.filter(
+        Submission.evaluated_at != None,
+        Submission.display_score != None
+    ).all()
+    
+    avg_score = 0
+    if evaluated_subs:
+        total_score = sum(sub.display_score for sub in evaluated_subs)
+        total_max = sum(sub.assignment.max_score for sub in evaluated_subs)
+        avg_score = (total_score / total_max * 100) if total_max > 0 else 0
+    
+    return render_template('student_dashboard.html', 
+                         student=student, 
+                         available_assignments=available_assignments,
+                         recent_submissions=recent_submissions, 
+                         enrolled_classrooms=enrolled_classrooms,
+                         total_submissions=total_submissions,
+                         evaluated_submissions=evaluated_submissions,
+                         avg_score=avg_score)
 
 
 @app.route('/student/join_classroom', methods=['GET', 'POST'])
@@ -886,13 +1023,16 @@ def student_join_classroom():
                 existing_enrollment = Enrollment.query.filter_by(student_id=student_id,
                                                                  classroom_id=classroom.id).first()
                 if existing_enrollment:
-                    flash(f'You are already enrolled in "{classroom.name}".', 'info')
+                    if existing_enrollment.is_approved:
+                        flash(f'You are already enrolled in "{classroom.name}".', 'info')
+                    else:
+                        flash(f'Your request to join "{classroom.name}" is pending teacher approval.', 'info')
                 else:
                     try:
-                        enrollment = Enrollment(student_id=student_id, classroom_id=classroom.id)
+                        enrollment = Enrollment(student_id=student_id, classroom_id=classroom.id, is_approved=False)
                         db.session.add(enrollment);
                         db.session.commit()
-                        flash(f'Successfully joined classroom "{classroom.name}"!', 'success');
+                        flash(f'Join request sent for classroom "{classroom.name}"! Waiting for teacher approval.', 'info');
                         return redirect(url_for('student_dashboard'))
                     except IntegrityError:
                         db.session.rollback(); flash('Could not join: already enrolled.', 'warning')
@@ -1018,12 +1158,321 @@ def student_report_pdf():
                      mimetype='application/pdf')
 
 
+@app.route('/student/assignments')
+def student_assignments_list():
+    if not session.get('student_logged_in'):
+        flash('Please log in as a student.', 'warning')
+        return redirect(url_for('login', role='student'))
+    
+    student = Student.query.get_or_404(session['student_id'])
+    enrolled_classrooms_ids = [e.classroom_id for e in student.enrollments.all()]
+    
+    # Get all assignments from enrolled classrooms
+    all_assignments = Assignment.query.filter(
+        Assignment.classroom_id.in_(enrolled_classrooms_ids)
+    ).order_by(Assignment.submission_deadline.desc()).all()
+    
+    # Get student's submissions
+    student_submissions = {s.assignment_id: s for s in student.submissions.all()}
+    
+    # Categorize assignments
+    available_assignments = []
+    submitted_assignments = []
+    overdue_assignments = []
+    
+    for assignment in all_assignments:
+        submission = student_submissions.get(assignment.id)
+        
+        if submission and submission.submitted_at:
+            submitted_assignments.append({
+                'assignment': assignment,
+                'submission': submission
+            })
+        elif assignment.submission_deadline < datetime.utcnow():
+            overdue_assignments.append(assignment)
+        else:
+            available_assignments.append(assignment)
+    
+    return render_template('student_assignments_list.html',
+                         student=student,
+                         available_assignments=available_assignments,
+                         submitted_assignments=submitted_assignments,
+                         overdue_assignments=overdue_assignments)
+
+
+@app.route('/student/profile')
+def student_profile():
+    if not session.get('student_logged_in'):
+        flash('Please log in as a student.', 'warning')
+        return redirect(url_for('login', role='student'))
+    
+    student = Student.query.get_or_404(session['student_id'])
+    
+    # Get comprehensive statistics
+    total_submissions = student.submissions.filter(Submission.submitted_at != None).count()
+    evaluated_submissions = student.submissions.filter(Submission.evaluated_at != None).count()
+    pending_submissions = total_submissions - evaluated_submissions
+    
+    # Get all submissions with scores
+    all_submissions = student.submissions.filter(
+        Submission.submitted_at != None,
+        Submission.evaluated_at != None,
+        Submission.display_score != None
+    ).join(Assignment).order_by(Submission.evaluated_at.desc()).all()
+    
+    # Calculate detailed statistics
+    if all_submissions:
+        scores = [sub.display_score for sub in all_submissions]
+        max_scores = [sub.assignment.max_score for sub in all_submissions]
+        percentages = [(score/max_score)*100 for score, max_score in zip(scores, max_scores)]
+        
+        avg_percentage = sum(percentages) / len(percentages)
+        highest_score = max(percentages)
+        lowest_score = min(percentages)
+        total_points_earned = sum(scores)
+        total_points_possible = sum(max_scores)
+    else:
+        avg_percentage = 0
+        highest_score = 0
+        lowest_score = 0
+        total_points_earned = 0
+        total_points_possible = 0
+    
+    # Get enrolled classrooms count
+    enrolled_classrooms_count = student.enrollments.count()
+    
+    stats = {
+        'total_submissions': total_submissions,
+        'evaluated_submissions': evaluated_submissions,
+        'pending_submissions': pending_submissions,
+        'avg_percentage': avg_percentage,
+        'highest_score': highest_score,
+        'lowest_score': lowest_score,
+        'total_points_earned': total_points_earned,
+        'total_points_possible': total_points_possible,
+        'enrolled_classrooms_count': enrolled_classrooms_count
+    }
+    
+    return render_template('student_profile.html', student=student, stats=stats, all_submissions=all_submissions)
+
+
 @app.route('/student/logout')
 def student_logout():
     session.pop('student_logged_in', None);
     session.pop('student_id', None)
     flash('Student logged out successfully.', 'info');
     return redirect(url_for('index'))
+
+
+# Approval Routes
+@app.route('/teacher/approve_student/<int:enrollment_id>')
+def approve_student_enrollment(enrollment_id):
+    if not session.get('teacher_logged_in'):
+        flash('Please log in as a teacher.', 'warning')
+        return redirect(url_for('login', role='teacher'))
+    
+    teacher_id = session['teacher_id']
+    enrollment = Enrollment.query.get_or_404(enrollment_id)
+    
+    # Check if teacher owns the classroom
+    if enrollment.classroom.teacher_id != teacher_id:
+        flash('You can only approve students for your own classrooms.', 'danger')
+        return redirect(url_for('teacher_dashboard'))
+    
+    enrollment.is_approved = True
+    enrollment.approved_by = teacher_id
+    enrollment.approved_at = datetime.utcnow()
+    
+    try:
+        db.session.commit()
+        flash(f'Student {enrollment.student.full_name} approved for {enrollment.classroom.name}!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error approving student: {e}', 'danger')
+    
+    return redirect(url_for('teacher_dashboard'))
+
+
+@app.route('/admin/approve_teacher/<int:teacher_id>')
+def approve_teacher(teacher_id):
+    if not session.get('admin_logged_in'):
+        flash('Please log in as admin.', 'warning')
+        return redirect(url_for('login', role='admin'))
+    
+    admin = Admin.query.get_or_404(session['admin_id'])
+    teacher = Teacher.query.get_or_404(teacher_id)
+    
+    # Check if university admin can approve this teacher
+    if admin.role == 'university_admin' and admin.university != teacher.university:
+        flash('You can only approve teachers from your university.', 'danger')
+        return redirect(url_for('admin_dashboard'))
+    
+    teacher.is_approved = True
+    teacher.approved_by = session['admin_id']
+    teacher.approved_at = datetime.utcnow()
+    
+    try:
+        db.session.commit()
+        flash(f'Teacher {teacher.full_name} approved successfully!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error approving teacher: {e}', 'danger')
+    
+    return redirect(url_for('admin_dashboard'))
+
+
+# Profile Management Routes
+@app.route('/student/profile/edit', methods=['GET', 'POST'])
+def student_profile_edit():
+    if not session.get('student_logged_in'):
+        flash('Please log in as a student.', 'warning')
+        return redirect(url_for('login', role='student'))
+    
+    student = Student.query.get_or_404(session['student_id'])
+    
+    if request.method == 'POST':
+        # Handle profile image upload
+        if 'profile_image' in request.files:
+            file = request.files['profile_image']
+            if file and file.filename and allowed_file(file.filename):
+                filename = secure_filename(f"student_{student.id}_{file.filename}")
+                file_path = os.path.join('uploads/profiles', filename)
+                file.save(file_path)
+                student.profile_image = file_path
+        
+        # Handle document uploads
+        for doc_type in ['id_card', 'verification_photo', 'other']:
+            if doc_type in request.files:
+                file = request.files[doc_type]
+                if file and file.filename and allowed_file(file.filename):
+                    filename = secure_filename(f"student_{student.id}_{doc_type}_{file.filename}")
+                    file_path = os.path.join('uploads/documents', filename)
+                    file.save(file_path)
+                    
+                    # Save document record
+                    document = StudentDocument(
+                        student_id=student.id,
+                        document_type=doc_type,
+                        file_path=file_path,
+                        original_filename=file.filename
+                    )
+                    db.session.add(document)
+        
+        try:
+            db.session.commit()
+            flash('Profile updated successfully!', 'success')
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error updating profile: {e}', 'danger')
+        
+        return redirect(url_for('student_profile'))
+    
+    return render_template('student_profile_edit.html', student=student)
+
+
+@app.route('/teacher/profile/edit', methods=['GET', 'POST'])
+def teacher_profile_edit():
+    if not session.get('teacher_logged_in'):
+        flash('Please log in as a teacher.', 'warning')
+        return redirect(url_for('login', role='teacher'))
+    
+    teacher = Teacher.query.get_or_404(session['teacher_id'])
+    
+    if request.method == 'POST':
+        # Handle profile image upload
+        if 'profile_image' in request.files:
+            file = request.files['profile_image']
+            if file and file.filename and allowed_file(file.filename):
+                filename = secure_filename(f"teacher_{teacher.id}_{file.filename}")
+                file_path = os.path.join('uploads/profiles', filename)
+                file.save(file_path)
+                teacher.profile_image = file_path
+        
+        # Handle document uploads
+        for doc_type in ['id_card', 'verification_photo', 'certificate', 'other']:
+            if doc_type in request.files:
+                file = request.files[doc_type]
+                if file and file.filename and allowed_file(file.filename):
+                    filename = secure_filename(f"teacher_{teacher.id}_{doc_type}_{file.filename}")
+                    file_path = os.path.join('uploads/documents', filename)
+                    file.save(file_path)
+                    
+                    # Save document record
+                    document = TeacherDocument(
+                        teacher_id=teacher.id,
+                        document_type=doc_type,
+                        file_path=file_path,
+                        original_filename=file.filename
+                    )
+                    db.session.add(document)
+        
+        try:
+            db.session.commit()
+            flash('Profile updated successfully!', 'success')
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error updating profile: {e}', 'danger')
+        
+        return redirect(url_for('teacher_dashboard'))
+    
+    return render_template('teacher_profile_edit.html', teacher=teacher)
+
+
+@app.route('/uploads/<path:filename>')
+def uploaded_file(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
+
+# Analytics Routes
+@app.route('/teacher/analytics')
+def teacher_analytics():
+    if not session.get('teacher_logged_in'):
+        flash('Please log in as a teacher.', 'warning')
+        return redirect(url_for('login', role='teacher'))
+    
+    teacher_id = session['teacher_id']
+    teacher = Teacher.query.get_or_404(teacher_id)
+    
+    # Get analytics data
+    total_assignments = teacher.assignments.count()
+    total_classrooms = teacher.classrooms.count()
+    total_submissions = db.session.query(Submission).join(Assignment).filter(Assignment.teacher_id == teacher_id).count()
+    evaluated_submissions = db.session.query(Submission).join(Assignment).filter(
+        Assignment.teacher_id == teacher_id, 
+        Submission.evaluated_at != None
+    ).count()
+    
+    # Get evaluation method breakdown
+    ai_evaluations = db.session.query(Submission).join(Assignment).filter(
+        Assignment.teacher_id == teacher_id,
+        Submission.evaluation_method == 'gemini'
+    ).count()
+    
+    manual_evaluations = db.session.query(Submission).join(Assignment).filter(
+        Assignment.teacher_id == teacher_id,
+        Submission.evaluation_method == 'expected'
+    ).count()
+    
+    # Get average scores
+    avg_score_query = db.session.query(func.avg(Submission.score)).join(Assignment).filter(
+        Assignment.teacher_id == teacher_id,
+        Submission.evaluated_at != None
+    ).scalar()
+    avg_score = round(avg_score_query, 2) if avg_score_query else 0
+    
+    analytics_data = {
+        'total_assignments': total_assignments,
+        'total_classrooms': total_classrooms,
+        'total_submissions': total_submissions,
+        'evaluated_submissions': evaluated_submissions,
+        'pending_evaluations': total_submissions - evaluated_submissions,
+        'ai_evaluations': ai_evaluations,
+        'manual_evaluations': manual_evaluations,
+        'avg_score': avg_score,
+        'evaluation_rate': round((evaluated_submissions / total_submissions * 100), 2) if total_submissions > 0 else 0
+    }
+    
+    return render_template('teacher_analytics.html', teacher=teacher, analytics=analytics_data)
 
 
 # Combined Login Route
@@ -1041,17 +1490,22 @@ def login():
         if not username or not password:
             flash('Username and password are required.', 'danger')
         else:
-            hashed_password = hash_password(password)
             user = None
             if role == 'teacher':
-                user = Teacher.query.filter_by(username=username, password=hashed_password).first()
+                user = Teacher.query.filter_by(username=username).first()
+                if user and user.password != hash_password(password):
+                    user = None
             elif role == 'student':
-                user = Student.query.filter_by(username=username, password=hashed_password).first()
+                user = Student.query.filter_by(username=username).first()
+                if user and user.password != hash_password(password):
+                    user = None
             elif role == 'admin':
                 if admin_code != os.environ.get('ADMIN_SECRET', 'admin123'):
                     flash('Invalid admin code.', 'danger')
                 else:
-                    user = Admin.query.filter_by(username=username, password=hashed_password).first()
+                    user = Admin.query.filter_by(username=username).first()
+                    if user and user.password != hash_password(password):
+                        user = None
             if user:
                 session[f'{role}_logged_in'], session[f'{role}_id'] = True, user.id
                 flash('Login successful!', 'success');
@@ -1112,7 +1566,7 @@ def assignment_analytics(assignment_id):
 # Error Handlers
 @app.errorhandler(404)
 def page_not_found(e):
-    flash('Error 404: The page you are looking for does not exist.', 'danger')
+    # Don't flash error messages, just redirect silently
     target_dashboard = 'index'
     if 'teacher_logged_in' in session:
         target_dashboard = 'teacher_dashboard'
@@ -1175,13 +1629,30 @@ if __name__ == '__main__':
             db.create_all();
             print("DB tables created/ensured.")
             if not Admin.query.first():
+                # Create default system admin
                 db.session.add(
-                    Admin(username='admin', password=hash_password(os.environ.get('DEFAULT_ADMIN_PASS', 'admin123'))))
+                    Admin(username='admin', password=hash_password(os.environ.get('DEFAULT_ADMIN_PASS', 'admin123')),
+                          full_name='System Administrator', role='admin'))
                 print(f"Default admin 'admin' created.")
+                
+                # Create University of Mirpur Khas admin
+                db.session.add(
+                    Admin(username='admin_mirpur', password=hash_password('mirpur123'),
+                          email='admin_mirpur@sclassroom.com', full_name='University of Mirpur Khas Admin',
+                          university='University of Mirpur Khas', role='university_admin'))
+                print(f"University admin for 'University of Mirpur Khas' created.")
+                
+                # Create University of Sindh admin
+                db.session.add(
+                    Admin(username='admin_sindh', password=hash_password('sindh123'),
+                          email='admin_sindh@sclassroom.com', full_name='University of Sindh Admin',
+                          university='University of Sindh', role='university_admin'))
+                print(f"University admin for 'University of Sindh' created.")
             if not Teacher.query.first():
                 teacher = Teacher(username='teacher',
                                   password=hash_password(os.environ.get('DEFAULT_TEACHER_PASS', 'teacher123')),
-                                  full_name='Ada Lovelace', email='ada.lovelace@example.com')
+                                  full_name='Ada Lovelace', email='ada.lovelace@example.com',
+                                  university='University of Mirpur Khas', is_approved=True)
                 db.session.add(teacher);
                 db.session.commit()
                 print(f"Default teacher 'teacher' created.")

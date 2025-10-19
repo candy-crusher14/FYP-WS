@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Profile - Smart Classroom</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary-green: #2ecc71;
+            --light-gray: #f5f7fa;
+            --medium-gray: #e0e7ee;
+            --text-dark: #2c3e50;
+            --text-light: #7f8c8d;
+            --shadow-sm: 0 4px 6px rgba(0, 0, 0, 0.1);
+            --shadow-md: 0 8px 15px rgba(0, 0, 0, 0.1);
+            --transition: all 0.3s ease;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: var(--light-gray);
+            color: var(--text-dark);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: linear-gradient(135deg, var(--primary-green), #27ae60);
+            color: white;
+            padding: 2rem;
+            border-radius: 15px;
+            box-shadow: var(--shadow-md);
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+
+        .form-container {
+            background: white;
+            border-radius: 15px;
+            padding: 2rem;
+            box-shadow: var(--shadow-sm);
+            margin-bottom: 2rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: var(--text-dark);
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid var(--medium-gray);
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: var(--transition);
+        }
+
+        .form-control:focus {
+            border-color: var(--primary-green);
+            outline: none;
+        }
+
+        .file-upload {
+            border: 2px dashed var(--medium-gray);
+            border-radius: 8px;
+            padding: 2rem;
+            text-align: center;
+            transition: var(--transition);
+            cursor: pointer;
+        }
+
+        .file-upload:hover {
+            border-color: var(--primary-green);
+            background-color: rgba(46, 204, 113, 0.1);
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: var(--transition);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background-color: var(--primary-green);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: #27ae60;
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background-color: var(--medium-gray);
+            color: var(--text-dark);
+        }
+
+        .document-section {
+            border-top: 1px solid var(--medium-gray);
+            padding-top: 2rem;
+            margin-top: 2rem;
+        }
+
+        .document-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1><i class="fas fa-user-edit"></i> Edit Student Profile</h1>
+            <p>Update your profile information and documents</p>
+        </div>
+
+        <form method="POST" action="{{ url_for('student_profile_edit') }}" enctype="multipart/form-data">
+            <div class="form-container">
+                <h3>Profile Image</h3>
+                <div class="form-group">
+                    <label for="profile_image">Profile Picture</label>
+                    <div class="file-upload">
+                        <i class="fas fa-camera fa-2x" style="color: var(--primary-green); margin-bottom: 1rem;"></i>
+                        <p>Click to upload profile image</p>
+                        <input type="file" id="profile_image" name="profile_image" accept="image/*" style="display: none;">
+                    </div>
+                </div>
+
+                <div class="document-section">
+                    <h3>Upload Documents</h3>
+                    <div class="document-grid">
+                        <div class="form-group">
+                            <label for="id_card">ID Card</label>
+                            <input type="file" id="id_card" name="id_card" class="form-control" accept=".pdf,.jpg,.jpeg,.png">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="verification_photo">Verification Photo</label>
+                            <input type="file" id="verification_photo" name="verification_photo" class="form-control" accept="image/*">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="other">Other Documents</label>
+                            <input type="file" id="other" name="other" class="form-control" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png">
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-top: 2rem; display: flex; gap: 1rem;">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Update Profile
+                    </button>
+                    <a href="{{ url_for('student_profile') }}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Back to Profile
+                    </a>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        document.querySelector('.file-upload').addEventListener('click', function() {
+            document.getElementById('profile_image').click();
+        });
+
+        document.getElementById('profile_image').addEventListener('change', function(e) {
+            if (e.target.files.length > 0) {
+                document.querySelector('.file-upload p').textContent = 'Image selected: ' + e.target.files[0].name;
+            }
+        });
+    </script>
+</body>
+</html>

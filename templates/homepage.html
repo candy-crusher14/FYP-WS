@@ -945,6 +945,26 @@
     </style>
 </head>
 <body>
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div style="position: fixed; top: 20px; right: 20px; z-index: 9999;">
+        {% for category, message in messages %}
+        <div class="alert alert-{{ category if category != 'message' else 'info' }}" style="margin-bottom: 10px; min-width: 300px; padding: 12px 20px; border-radius: 8px; border-left: 4px solid; box-shadow: 0 8px 15px rgba(0, 0, 0, 0.1);">
+            {{ message }}
+            <button type="button" onclick="this.parentElement.remove()" style="background: none; border: none; font-size: 1.2rem; cursor: pointer; margin-left: auto; float: right;">&times;</button>
+        </div>
+        {% endfor %}
+    </div>
+    <style>
+        .alert-success { background-color: #d4edda; border-color: var(--success); color: #155724; }
+        .alert-danger { background-color: #f8d7da; border-color: var(--danger); color: #721c24; }
+        .alert-warning { background-color: #fff3cd; border-color: var(--warning); color: #856404; }
+        .alert-info { background-color: #d1ecf1; border-color: var(--primary-blue); color: #0c5460; }
+    </style>
+    {% endif %}
+    {% endwith %}
+
     <!-- Project Info Banner -->
     <div class="project-info">
         <div class="container">

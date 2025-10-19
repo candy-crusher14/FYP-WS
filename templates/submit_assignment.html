@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Submit Assignment - Smart Classroom</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary-blue: #3498db;
+            --primary-green: #2ecc71;
+            --primary-purple: #9b59b6;
+            --light-gray: #f5f7fa;
+            --medium-gray: #e0e7ee;
+            --dark-gray: #34495e;
+            --text-dark: #2c3e50;
+            --text-light: #7f8c8d;
+            --success: #2ecc71;
+            --warning: #f39c12;
+            --danger: #e74c3c;
+            --shadow-sm: 0 4px 6px rgba(0, 0, 0, 0.1);
+            --shadow-md: 0 8px 15px rgba(0, 0, 0, 0.1);
+            --shadow-lg: 0 15px 30px rgba(0, 0, 0, 0.1);
+            --transition: all 0.3s ease;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: var(--light-gray);
+            color: var(--text-dark);
+            line-height: 1.6;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: linear-gradient(135deg, var(--primary-blue), var(--primary-purple));
+            color: white;
+            padding: 2rem;
+            border-radius: 15px;
+            box-shadow: var(--shadow-lg);
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+
+        .assignment-info {
+            background: white;
+            border-radius: 15px;
+            box-shadow: var(--shadow-md);
+            margin-bottom: 2rem;
+            overflow: hidden;
+        }
+
+        .assignment-header {
+            background: linear-gradient(135deg, var(--primary-green), var(--primary-blue));
+            color: white;
+            padding: 1.5rem;
+        }
+
+        .assignment-title {
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .assignment-meta {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .meta-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .assignment-content {
+            padding: 2rem;
+        }
+
+        .section-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: var(--text-dark);
+            margin-bottom: 1rem;
+            border-bottom: 2px solid var(--primary-blue);
+            padding-bottom: 0.5rem;
+        }
+
+        .instructions {
+            background-color: var(--light-gray);
+            padding: 1.5rem;
+            border-radius: 10px;
+            border-left: 4px solid var(--primary-blue);
+            margin-bottom: 2rem;
+            white-space: pre-wrap;
+            line-height: 1.8;
+        }
+
+        .deadline-warning {
+            background-color: #fff3cd;
+            border: 1px solid var(--warning);
+            color: #856404;
+            padding: 1rem;
+            border-radius: 10px;
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .deadline-warning.urgent {
+            background-color: #f8d7da;
+            border-color: var(--danger);
+            color: #721c24;
+        }
+
+        .form-container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: var(--shadow-md);
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .form-group {
+            margin-bottom: 2rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: var(--text-dark);
+            font-size: 1.1rem;
+        }
+
+        .form-group textarea {
+            width: 100%;
+            min-height: 300px;
+            padding: 1rem;
+            border: 2px solid var(--medium-gray);
+            border-radius: 10px;
+            font-size: 1rem;
+            font-family: 'Poppins', sans-serif;
+            resize: vertical;
+            transition: var(--transition);
+        }
+
+        .form-group textarea:focus {
+            outline: none;
+            border-color: var(--primary-blue);
+            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+        }
+
+        .char-counter {
+            text-align: right;
+            font-size: 0.9rem;
+            color: var(--text-light);
+            margin-top: 0.5rem;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+        }
+
+        .btn {
+            padding: 1rem 2rem;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            text-decoration: none;
+            text-align: center;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary {
+            background-color: var(--primary-green);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: #27ae60;
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background-color: var(--medium-gray);
+            color: var(--text-dark);
+        }
+
+        .btn-secondary:hover {
+            background-color: var(--dark-gray);
+            color: white;
+        }
+
+        .flash-messages {
+            margin-bottom: 2rem;
+        }
+
+        .alert {
+            padding: 1rem;
+            border-radius: 10px;
+            margin-bottom: 1rem;
+            border-left: 4px solid;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .alert-success {
+            background-color: #d4edda;
+            border-color: var(--success);
+            color: #155724;
+        }
+
+        .alert-danger {
+            background-color: #f8d7da;
+            border-color: var(--danger);
+            color: #721c24;
+        }
+
+        .alert-warning {
+            background-color: #fff3cd;
+            border-color: var(--warning);
+            color: #856404;
+        }
+
+        .alert-info {
+            background-color: #d1ecf1;
+            border-color: var(--primary-blue);
+            color: #0c5460;
+        }
+
+        .student-info {
+            background: white;
+            border-radius: 15px;
+            box-shadow: var(--shadow-md);
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            border-left: 4px solid var(--primary-purple);
+        }
+
+        .tips {
+            background: linear-gradient(135deg, #e8f5e8, #f0f8ff);
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            border-left: 4px solid var(--primary-green);
+        }
+
+        .tips h4 {
+            color: var(--text-dark);
+            margin-bottom: 1rem;
+        }
+
+        .tips ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .tips li {
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.5rem;
+        }
+
+        .tips li i {
+            color: var(--primary-green);
+            margin-top: 0.2rem;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .assignment-meta {
+                grid-template-columns: 1fr;
+            }
+
+            .btn-group {
+                flex-direction: column;
+            }
+
+            .form-group textarea {
+                min-height: 250px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flash-messages">
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ 'danger' if category == 'error' else category }}">
+                            <i class="fas fa-{{ 'exclamation-triangle' if category == 'danger' else 'info-circle' if category == 'info' else 'check-circle' if category == 'success' else 'exclamation-circle' }}"></i>
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <!-- Header -->
+        <div class="header">
+            <h1><i class="fas fa-edit"></i> Submit Assignment</h1>
+            <p>Complete and submit your assignment response</p>
+        </div>
+
+        <!-- Student Info -->
+        <div class="student-info">
+            <h3><i class="fas fa-user-graduate"></i> Student: {{ student.full_name }}</h3>
+            <p><i class="fas fa-id-badge"></i> {{ student.username }} | <i class="fas fa-envelope"></i> {{ student.email }}</p>
+        </div>
+
+        <!-- Assignment Information -->
+        <div class="assignment-info">
+            <div class="assignment-header">
+                <div class="assignment-title">{{ assignment.title }}</div>
+                <div class="assignment-meta">
+                    <div class="meta-item">
+                        <i class="fas fa-school"></i>
+                        <span>{{ assignment.classroom.name }}</span>
+                    </div>
+                    <div class="meta-item">
+                        <i class="fas fa-chalkboard-teacher"></i>
+                        <span>{{ assignment.teacher.full_name }}</span>
+                    </div>
+                    <div class="meta-item">
+                        <i class="fas fa-calendar-alt"></i>
+                        <span>Due: {{ assignment.submission_deadline.strftime('%Y-%m-%d %H:%M') }}</span>
+                    </div>
+                    <div class="meta-item">
+                        <i class="fas fa-star"></i>
+                        <span>Max Score: {{ assignment.max_score }}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="assignment-content">
+                <h3 class="section-title"><i class="fas fa-clipboard-list"></i> Instructions</h3>
+                <div class="instructions">{{ assignment.instructions }}</div>
+            </div>
+        </div>
+
+        <!-- Deadline Warning -->
+        {% set time_left = assignment.submission_deadline - moment.utcnow() if moment else None %}
+        {% if assignment.submission_deadline %}
+            {% set hours_left = ((assignment.submission_deadline - moment.utcnow()).total_seconds() / 3600) if moment else 24 %}
+            <div class="deadline-warning {{ 'urgent' if hours_left < 24 else '' }}">
+                <i class="fas fa-clock"></i>
+                <span>
+                    <strong>Deadline:</strong> {{ assignment.submission_deadline.strftime('%B %d, %Y at %H:%M UTC') }}
+                </span>
+            </div>
+        {% endif %}
+
+        <!-- Tips -->
+        <div class="tips">
+            <h4><i class="fas fa-lightbulb"></i> Submission Tips</h4>
+            <ul>
+                <li><i class="fas fa-check"></i> Read the instructions carefully before starting</li>
+                <li><i class="fas fa-check"></i> Write clear and detailed responses</li>
+                <li><i class="fas fa-check"></i> Review your answer before submitting</li>
+                <li><i class="fas fa-check"></i> Make sure to address all parts of the question</li>
+                <li><i class="fas fa-check"></i> Use proper grammar and formatting</li>
+            </ul>
+        </div>
+
+        <!-- Submission Form -->
+        <div class="form-container">
+            <form method="POST" id="submissionForm">
+                <div class="form-group">
+                    <label for="answer_text">
+                        <i class="fas fa-pen-alt"></i> Your Answer
+                    </label>
+                    <textarea 
+                        id="answer_text" 
+                        name="answer_text" 
+                        placeholder="Type your detailed answer here..."
+                        required
+                        oninput="updateCharCounter()"
+                    ></textarea>
+                    <div class="char-counter" id="charCounter">0 characters</div>
+                </div>
+
+                <div class="btn-group">
+                    <button type="submit" class="btn btn-primary" onclick="return confirmSubmission()">
+                        <i class="fas fa-paper-plane"></i> Submit Assignment
+                    </button>
+                    <a href="{{ url_for('student_dashboard') }}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Back to Dashboard
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function updateCharCounter() {
+            const textarea = document.getElementById('answer_text');
+            const counter = document.getElementById('charCounter');
+            const count = textarea.value.length;
+            counter.textContent = count + ' characters';
+            
+            if (count < 50) {
+                counter.style.color = '#e74c3c';
+            } else if (count < 200) {
+                counter.style.color = '#f39c12';
+            } else {
+                counter.style.color = '#2ecc71';
+            }
+        }
+
+        function confirmSubmission() {
+            const textarea = document.getElementById('answer_text');
+            const answer = textarea.value.trim();
+            
+            if (answer.length < 10) {
+                alert('Please provide a more detailed answer (at least 10 characters).');
+                return false;
+            }
+            
+            return confirm('Are you sure you want to submit this assignment? You cannot modify it after submission.');
+        }
+
+        // Auto-save functionality (optional)
+        let autoSaveTimer;
+        document.getElementById('answer_text').addEventListener('input', function() {
+            clearTimeout(autoSaveTimer);
+            autoSaveTimer = setTimeout(function() {
+                // Could implement auto-save to localStorage here
+                console.log('Auto-saving draft...');
+            }, 2000);
+        });
+
+        // Load any saved draft on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            const savedDraft = localStorage.getItem('assignment_{{ assignment.id }}_draft');
+            if (savedDraft) {
+                document.getElementById('answer_text').value = savedDraft;
+                updateCharCounter();
+            }
+        });
+
+        // Save draft before leaving page
+        window.addEventListener('beforeunload', function() {
+            const answer = document.getElementById('answer_text').value;
+            if (answer.trim()) {
+                localStorage.setItem('assignment_{{ assignment.id }}_draft', answer);
+            }
+        });
+    </script>
+</body>
+</html>

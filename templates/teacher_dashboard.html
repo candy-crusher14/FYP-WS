@@ -922,6 +922,37 @@
                     </tbody>
                 </table>
             </div>
+            
+            <!-- Pending Student Approvals -->
+            {% if pending_enrollments %}
+            <h2 style="margin-bottom: 20px;">Pending Student Approvals</h2>
+            <div class="card-grid">
+                {% for enrollment in pending_enrollments %}
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">{{ enrollment.student.full_name }}</div>
+                        <div class="card-subtitle">{{ enrollment.classroom.name }}</div>
+                    </div>
+                    <div class="card-body">
+                        <p><strong>Roll Number:</strong> {{ enrollment.student.roll_number }}</p>
+                        <p><strong>University:</strong> {{ enrollment.student.university }}</p>
+                        <p><strong>Department:</strong> {{ enrollment.student.department }} - Year {{ enrollment.student.year }}</p>
+                        <p><strong>Requested:</strong> {{ enrollment.enrolled_at.strftime('%b %d, %Y %H:%M') }}</p>
+                    </div>
+                    <div class="card-footer">
+                        <a href="{{ url_for('approve_student_enrollment', enrollment_id=enrollment.id) }}" 
+                           class="btn btn-sm btn-success">
+                            <i class="fas fa-check"></i> Approve
+                        </a>
+                        <a href="{{ url_for('student_profile', student_id=enrollment.student.id) }}" 
+                           class="btn btn-sm btn-info">
+                            <i class="fas fa-user"></i> View Profile
+                        </a>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
         </div>
 
         <!-- Create Assignment Section -->
@@ -934,8 +965,7 @@
                                 type="text" id="assignment_title_create" name="title" class="form-control" required>
                         </div>
                         <div class="form-group"><label for="classroom_id_create">Classroom</label>
-                            <select id="classroom_id_create" name="classroom_id" class="form-select" required
-                                    onchange="updateSemesters()">
+                            <select id="classroom_id_create" name="classroom_id" class="form-select" required>
                                 <option value="">Select Classroom</option>
                                 {% for c_item in teacher.classrooms.all() %}
                                 <option value="{{ c_item.id }}" data-year="{{ c_item.year }}">{{ c_item.name }}
@@ -949,10 +979,6 @@
                         <div class="form-group"><label for="deadline_days_create">Deadline (in days from
                             now)</label><input type="number" id="deadline_days_create" name="deadline_days"
                                                class="form-control" min="1" value="7" required></div>
-                        <div class="form-group"><label for="semester_create">Semester</label><select
-                                id="semester_create" name="semester" class="form-select" required>
-                            <option value="">Select Semester</option>
-                        </select></div>
                     </div>
                     <div class="form-group"><label for="max_score_create">Maximum Score</label><input type="number"
                                                                                                       id="max_score_create"
@@ -1308,7 +1334,7 @@
                         <a href="{{ url_for('teacher_report_assignment', assignment_id=assignment_item.id) }}"
                            class="btn btn-sm btn-primary" target="_blank"><i class="fas fa-download me-1"></i> Download
                             PDF Report</a>
-                        <a href="{{ url_for('assignment_analytics', assignment_id=assignment_item.id) }}"
+                        <a href="{{ url_for('teacher_analytics') }}"
                            class="btn btn-sm btn-info"><i class="fas fa-chart-line me-1"></i> View Analytics</a>
                     </div>
                 </div>
@@ -1353,6 +1379,19 @@
                             <option value="4">4th Year</option>
                         </select></div>
                     </div>
+                    <div class="mb-3"><label for="classroomSemesterModal" class="form-label">Semester <span
+                            class="text-danger">*</span></label><select class="form-select" id="classroomSemesterModal"
+                                                                        name="semester" required>
+                        <option value="">Select Semester</option>
+                        <option value="Semester 1">Semester 1</option>
+                        <option value="Semester 2">Semester 2</option>
+                        <option value="Semester 3">Semester 3</option>
+                        <option value="Semester 4">Semester 4</option>
+                        <option value="Semester 5">Semester 5</option>
+                        <option value="Semester 6">Semester 6</option>
+                        <option value="Semester 7">Semester 7</option>
+                        <option value="Semester 8">Semester 8</option>
+                    </select></div>
                     <div class="mb-3"><label for="classroomDescriptionModal" class="form-label">Description
                         (Optional)</label><textarea class="form-control" id="classroomDescriptionModal"
                                                     name="description" rows="3"></textarea></div>
@@ -1402,23 +1441,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-    const semesterMap = {
-        1: ["Semester 1", "Semester 2"],
-        2: ["Semester 3", "Semester 4"],
-        3: ["Semester 5", "Semester 6"],
-        4: ["Semester 7", "Semester 8"]
-    };
-
-    function updateSemesters() {
-        const crSel = document.getElementById('classroom_id_create'),
-            semSel = document.getElementById('semester_create'), opt = crSel.options[crSel.selectedIndex];
-        semSel.innerHTML = '<option value="">Select Semester</option>';
-        if (!opt || !opt.value) return;
-        const year = parseInt(opt.getAttribute('data-year')), sems = semesterMap[year] || [];
-        let opts = '<option value="">Select Semester</option>';
-        sems.forEach(s => opts += `<option value="${s}">${s}</option>`);
-        semSel.innerHTML = opts;
-    }
 
     function showTab(tabId) {
         document.querySelectorAll('.main-content .tab-content').forEach(t => t.classList.remove('active'));

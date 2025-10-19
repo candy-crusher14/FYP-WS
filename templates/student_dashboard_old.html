@@ -746,36 +746,6 @@
     </style>
 </head>
 <body>
-    <!-- Flash Messages -->
-    {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-    <div style="position: fixed; top: 20px; right: 20px; z-index: 9999;">
-        {% for category, message in messages %}
-        <div class="alert alert-{{ category if category != 'message' else 'info' }} alert-dismissible fade show" role="alert" style="margin-bottom: 10px; min-width: 300px;">
-            {{ message }}
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-        {% endfor %}
-    </div>
-    <style>
-        .alert {
-            padding: 12px 20px;
-            border-radius: 8px;
-            border-left: 4px solid;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            box-shadow: var(--shadow-md);
-        }
-        .alert-success { background-color: #d4edda; border-color: var(--success); color: #155724; }
-        .alert-danger { background-color: #f8d7da; border-color: var(--danger); color: #721c24; }
-        .alert-warning { background-color: #fff3cd; border-color: var(--warning); color: #856404; }
-        .alert-info { background-color: #d1ecf1; border-color: var(--primary-blue); color: #0c5460; }
-        .btn-close { background: none; border: none; font-size: 1.2rem; cursor: pointer; margin-left: auto; }
-    </style>
-    {% endif %}
-    {% endwith %}
-
     <!-- Header/Navigation -->
     <header>
         <div class="container">
@@ -797,10 +767,10 @@
                 </ul>
                 <div class="user-menu">
                     <div class="user-info">
-                        <div class="user-name">{{ student.full_name if student else 'Student' }}</div>
+                        <div class="user-name">Alex Johnson</div>
                         <div class="user-role">Student</div>
                     </div>
-                    <div class="user-avatar">{{ (student.full_name[0] if student and student.full_name else 'S')|upper }}</div>
+                    <div class="user-avatar">AJ</div>
                 </div>
             </nav>
         </div>
@@ -829,10 +799,8 @@
                     <span class="menu-text">Performance Tracker</span>
                 </li>
                 <li class="menu-item">
-                    <a href="{{ url_for('student_logout') }}" style="color: inherit; text-decoration: none; display: flex; align-items: center; gap: 12px;">
-                        <i class="fas fa-sign-out-alt"></i>
-                        <span class="menu-text">Logout</span>
-                    </a>
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span class="menu-text">Logout</span>
                 </li>
             </ul>
         </div>
@@ -843,9 +811,9 @@
             <div id="student-dashboard" class="tab-content">
                 <div class="page-header">
                     <h1 class="page-title">Student Dashboard</h1>
-                    <a href="{{ url_for('student_join_classroom') }}" class="btn btn-green">
+                    <button class="btn btn-green">
                         <i class="fas fa-plus"></i> Join Class
-                    </a>
+                    </button>
                 </div>
 
                 <!-- Dashboard Widgets -->
@@ -857,7 +825,7 @@
                                 <i class="fas fa-book"></i>
                             </div>
                         </div>
-                        <div class="widget-value">{{ enrolled_classrooms|length }}</div>
+                        <div class="widget-value">3</div>
                         <div class="widget-description">Classes you're enrolled in</div>
                     </div>
 
@@ -868,7 +836,7 @@
                                 <i class="fas fa-tasks"></i>
                             </div>
                         </div>
-                        <div class="widget-value">{{ available_assignments|length }}</div>
+                        <div class="widget-value">5</div>
                         <div class="widget-description">Assignments to complete</div>
                     </div>
 
@@ -879,13 +847,7 @@
                                 <i class="fas fa-star"></i>
                             </div>
                         </div>
-                        <div class="widget-value">
-                            {% if avg_score > 0 %}
-                                {{ "%.0f"|format(avg_score) }}%
-                            {% else %}
-                                --
-                            {% endif %}
-                        </div>
+                        <div class="widget-value">87%</div>
                         <div class="widget-description">Your overall performance</div>
                     </div>
                 </div>
@@ -893,41 +855,51 @@
                 <!-- Upcoming Assignments -->
                 <h2 style="margin-bottom: 20px;">Upcoming Assignments</h2>
                 <div class="card-grid">
-                    {% if available_assignments %}
-                        {% for assignment in available_assignments[:4] %}
-                        <div class="card">
-                            <div class="card-header">
-                                <div class="card-title">{{ assignment.title }}</div>
-                                <div class="card-subtitle">{{ assignment.classroom.name }} - Due: {{ assignment.submission_deadline.strftime('%b %d') }}</div>
-                            </div>
-                            <div class="card-body">
-                                <p>{{ assignment.instructions[:120] }}{% if assignment.instructions|length > 120 %}...{% endif %}</p>
-                                <div style="margin-top: 15px;">
-                                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                                        <span>Max Score:</span>
-                                        <span>{{ assignment.max_score }} points</span>
-                                    </div>
-                                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                                        <span>Teacher:</span>
-                                        <span>{{ assignment.teacher.full_name }}</span>
-                                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-title">Data Structures Final Project</div>
+                            <div class="card-subtitle">CS101 - Due: Tomorrow</div>
+                        </div>
+                        <div class="card-body">
+                            <p>Implement and analyze various data structures in Python. Submit your code and report.</p>
+                            <div style="margin-top: 15px;">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                                    <span>Your Progress:</span>
+                                    <span>75%</span>
+                                </div>
+                                <div style="height: 8px; background-color: var(--medium-gray); border-radius: 4px;">
+                                    <div style="width: 75%; height: 100%; background-color: var(--primary-blue); border-radius: 4px;"></div>
                                 </div>
                             </div>
-                            <div class="card-footer">
-                                <a href="{{ url_for('submit_assignment', assignment_id=assignment.id) }}" class="btn btn-sm btn-green">Submit</a>
-                                <button class="btn btn-sm">View Details</button>
+                        </div>
+                        <div class="card-footer">
+                            <button class="btn btn-sm btn-green">Continue</button>
+                            <button class="btn btn-sm">View Details</button>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-title">Web Development Assignment</div>
+                            <div class="card-subtitle">CS205 - Due: Jun 20</div>
+                        </div>
+                        <div class="card-body">
+                            <p>Create a responsive website using HTML, CSS, and JavaScript. Focus on mobile-first design.</p>
+                            <div style="margin-top: 15px;">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                                    <span>Your Progress:</span>
+                                    <span>40%</span>
+                                </div>
+                                <div style="height: 8px; background-color: var(--medium-gray); border-radius: 4px;">
+                                    <div style="width: 40%; height: 100%; background-color: var(--warning); border-radius: 4px;"></div>
+                                </div>
                             </div>
                         </div>
-                        {% endfor %}
-                    {% else %}
-                        <div class="card">
-                            <div class="card-body" style="text-align: center; padding: 40px;">
-                                <i class="fas fa-clipboard-check" style="font-size: 3rem; color: var(--text-light); margin-bottom: 15px;"></i>
-                                <h3>No Pending Assignments</h3>
-                                <p>You're all caught up! Great job staying on top of your work.</p>
-                            </div>
+                        <div class="card-footer">
+                            <button class="btn btn-sm btn-green">Continue</button>
+                            <button class="btn btn-sm">View Details</button>
                         </div>
-                    {% endif %}
+                    </div>
                 </div>
             </div>
 
@@ -1375,15 +1347,6 @@
             if (hash) {
                 showTab(hash);
             }
-            
-            // Auto-dismiss flash messages after 5 seconds
-            setTimeout(function() {
-                document.querySelectorAll('.alert').forEach(function(alert) {
-                    if (alert.querySelector('.btn-close')) {
-                        alert.querySelector('.btn-close').click();
-                    }
-                });
-            }, 5000);
         });
     </script>
 </body>
