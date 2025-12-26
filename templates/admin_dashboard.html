@@ -697,7 +697,7 @@
                 <div class="user-menu">
                     <div class="user-info">
                         <div class="user-name">{{ admin.full_name if admin else 'System Administrator' }}</div>
-                        <div class="user-role">Admin Portal</div>
+                        <div class="user-role">{{ admin.role|capitalize }}{% if admin.university %} | {{ admin.university.name }}{% endif %}</div>
                     </div>
                     <div class="user-avatar" onclick="toggleProfileDropdown()">{{ (admin.full_name[0] if admin and admin.full_name else 'A')|upper }}</div>
                     <div class="profile-dropdown" id="profileDropdown">
@@ -800,9 +800,9 @@
                 <div class="card-grid">
                     {% for teacher in pending_teachers %}
                     <div class="card">
-                        <div class="card-header">
+                                                <div class="card-header">
                             <div class="card-title">{{ teacher.full_name }}</div>
-                            <div class="card-subtitle">{{ teacher.university }}</div>
+                            <div class="card-subtitle">{{ teacher.university.name if teacher.university else 'N/A' }}</div>
                         </div>
                         <div class="card-body">
                             <p><strong>Username:</strong> {{ teacher.username }}</p>
@@ -849,58 +849,37 @@
                 <!-- Students Section -->
                 <h2 style="margin-bottom: 20px;">Students</h2>
                 <div class="card-grid">
-                    {% if admin.role == 'university_admin' and admin.university %}
-                        {% for student in students.all() %}
-                        <div class="card">
-                            <div class="card-header">
-                                <div class="card-title">{{ student.full_name }}</div>
-                                <div class="card-subtitle">{{ student.department }} - Year {{ student.year }}</div>
-                            </div>
-                            <div class="card-body">
-                                <p><strong>Email:</strong> {{ student.email }}</p>
-                                <p><strong>University:</strong> {{ student.university }}</p>
-                                <p><strong>Roll Number:</strong> {{ student.roll_number }}</p>
-                                <p><strong>Joined:</strong> {{ student.created_at.strftime('%b %d, %Y') }}</p>
-                            </div>
-                            <div class="card-footer">
-                                <a href="{{ url_for('admin_view_student_profile', student_id=student.id) }}" class="btn btn-sm btn-primary">
-                                    <i class="fas fa-eye"></i> View Profile
-                                </a>
-                            </div>
+                    {% set student_list = students.all() if admin.role == 'university_admin' and admin.university else Student.query.all() %}
+                    {% for student in student_list %}
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-title">{{ student.full_name }}</div>
+                            <div class="card-subtitle">{{ student.department }} - Year {{ student.year }}</div>
                         </div>
-                        {% endfor %}
-                    {% else %}
-                        {% for student in Student.query.all() %}
-                        <div class="card">
-                            <div class="card-header">
-                                <div class="card-title">{{ student.full_name }}</div>
-                                <div class="card-subtitle">{{ student.department }} - Year {{ student.year }}</div>
-                            </div>
-                            <div class="card-body">
-                                <p><strong>Email:</strong> {{ student.email }}</p>
-                                <p><strong>University:</strong> {{ student.university }}</p>
-                                <p><strong>Roll Number:</strong> {{ student.roll_number }}</p>
-                                <p><strong>Joined:</strong> {{ student.created_at.strftime('%b %d, %Y') }}</p>
-                            </div>
-                            <div class="card-footer">
-                                <a href="{{ url_for('admin_view_student_profile', student_id=student.id) }}" class="btn btn-sm btn-primary">
-                                    <i class="fas fa-eye"></i> View Profile
-                                </a>
-                            </div>
+                        <div class="card-body">
+                            <p><strong>Email:</strong> {{ student.email }}</p>
+                            <p><strong>University:</strong> {{ student.university.name if student.university else 'N/A' }}</p>
+                            <p><strong>Roll Number:</strong> {{ student.roll_number }}</p>
+                            <p><strong>Joined:</strong> {{ student.created_at.strftime('%b %d, %Y') }}</p>
                         </div>
-                        {% endfor %}
-                    {% endif %}
+                        <div class="card-footer">
+                            <a href="{{ url_for('admin_view_student_profile', student_id=student.id) }}" class="btn btn-sm btn-primary">
+                                <i class="fas fa-eye"></i> View Profile
+                            </a>
+                        </div>
+                    </div>
+                    {% endfor %}
                 </div>
 
                 <!-- Teachers Section -->
                 <h2 style="margin-bottom: 20px; margin-top: 40px;">Teachers</h2>
                 <div class="card-grid">
-                    {% if admin.role == 'university_admin' and admin.university %}
-                        {% for teacher in teachers.all() %}
+                    {% set teacher_list = teachers.all() if admin.role == 'university_admin' and admin.university else Teacher.query.all() %}
+                    {% for teacher in teacher_list %}
                         <div class="card">
                             <div class="card-header">
                                 <div class="card-title">{{ teacher.full_name }}</div>
-                                <div class="card-subtitle">{{ teacher.university }}</div>
+                                <div class="card-subtitle">{{ teacher.university.name if teacher.university else 'N/A' }}</div>
                             </div>
                             <div class="card-body">
                                 <p><strong>Email:</strong> {{ teacher.email }}</p>

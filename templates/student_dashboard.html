@@ -876,21 +876,15 @@
                 font-size: 1.1rem;
             }
         }
-    </style>
-</head>
-<body>
-    <!-- Flash Messages -->
-    {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-    <div style="position: fixed; top: 20px; right: 20px; z-index: 9999;">
-        {% for category, message in messages %}
-        <div class="alert alert-{{ category if category != 'message' else 'info' }} alert-dismissible fade show" role="alert" style="margin-bottom: 10px; min-width: 300px;">
-            {{ message }}
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-        {% endfor %}
-    </div>
-    <style>
+
+        .flash-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            width: auto;
+        }
+
         .alert {
             padding: 12px 20px;
             border-radius: 8px;
@@ -899,16 +893,44 @@
             align-items: center;
             gap: 10px;
             box-shadow: var(--shadow-md);
+            margin-bottom: 10px;
+            min-width: 300px;
         }
-        .alert-success { background-color: #d4edda; border-color: var(--success); color: #155724; }
-        .alert-danger { background-color: #f8d7da; border-color: var(--danger); color: #721c24; }
-        .alert-warning { background-color: #fff3cd; border-color: var(--warning); color: #856404; }
-        .alert-info { background-color: #d1ecf1; border-color: var(--primary-blue); color: #0c5460; }
-        .btn-close { background: none; border: none; font-size: 1.2rem; cursor: pointer; margin-left: auto; }
-    </style>
-    {% endif %}
-    {% endwith %}
 
+        .alert-success { 
+            background-color: #d4edda; 
+            border-color: var(--success); 
+            color: #155724; 
+        }
+
+        .alert-danger { 
+            background-color: #f8d7da; 
+            border-color: var(--danger); 
+            color: #721c24; 
+        }
+
+        .alert-warning { 
+            background-color: #fff3cd; 
+            border-color: var(--warning); 
+            color: #856404; 
+        }
+
+        .alert-info { 
+            background-color: #d1ecf1; 
+            border-color: var(--primary-blue); 
+            color: #0c5460; 
+        }
+
+        .btn-close { 
+            background: none; 
+            border: none; 
+            font-size: 1.2rem; 
+            cursor: pointer; 
+            margin-left: auto; 
+        }
+    </style>
+</head>
+<body>
     <!-- Header/Navigation -->
     <header>
         <div class="container">
@@ -930,8 +952,8 @@
                 </ul>
                 <div class="user-menu">
                     <div class="user-info">
-                        <div class="user-name">{{ student.full_name if student else 'Student' }}</div>
-                        <div class="user-role">Student</div>
+                        <div class="user-name">{{ student.full_name }}</div>
+                        <div class="user-role">Student | {{ student.university.name if student.university else 'N/A' }}</div>
                     </div>
                     <div class="user-avatar" onclick="toggleProfileDropdown()">{{ (student.full_name[0] if student and student.full_name else 'S')|upper }}</div>
                     <div class="profile-dropdown" id="profileDropdown">

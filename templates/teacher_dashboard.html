@@ -822,8 +822,8 @@
             </ul>
             <div class="user-menu">
                 <div class="user-info">
-                    <div class="user-name">Welcome, {{ teacher.full_name if teacher else 'Teacher' }}</div>
-                    <div class="user-role">Teacher Portal</div>
+                    <div class="user-name">{{ teacher.full_name }}</div>
+                    <div class="user-role">Teacher | {{ teacher.university.name if teacher.university else 'N/A' }}</div>
                 </div>
                 <div class="user-avatar" onclick="toggleProfileDropdown()">{{ (teacher.full_name[0] if teacher and teacher.full_name else 'T')|upper }}
                 </div>
@@ -988,7 +988,7 @@
                     </tbody>
                 </table>
             </div>
-            
+
             <!-- Pending Student Approvals -->
             {% if pending_enrollments %}
             <h2 style="margin-bottom: 20px;">Pending Student Approvals</h2>
@@ -1000,6 +1000,8 @@
                         <div class="card-subtitle">{{ enrollment.classroom.name }}</div>
                     </div>
                     <div class="card-body">
+                        {% if enrollment.student.description %}<p class="mb-3"><em>{{
+                            enrollment.student.description|truncate(100) }}</em></p>{% endif %}
                         <p><strong>Roll Number:</strong> {{ enrollment.student.roll_number }}</p>
                         <p><strong>University:</strong> {{ enrollment.student.university }}</p>
                         <p><strong>Department:</strong> {{ enrollment.student.department }} - Year {{ enrollment.student.year }}</p>
@@ -1230,6 +1232,9 @@
                         </div>
                         <a href="{{ url_for('teacher_view_submission_details', submission_id=sub.id) }}"
                            class="btn btn-sm btn-info"><i class="fas fa-eye me-1"></i> View Details</a>
+                        <button type="button" class="btn btn-sm btn-info view-clusters-btn" data-assignment-id="{{ sub.assignment.id }}">
+                            <i class="fas fa-brain me-1"></i> View AI Clusters
+                        </button>
                     </div>
                 </div>
                 {% endfor %}{% else %}
@@ -1408,6 +1413,27 @@
     </div>
 </div>
 
+<!-- AI Cluster Modal -->
+<div class="modal fade" id="aiClusterModal" tabindex="-1" aria-labelledby="aiClusterModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="aiClusterModalLabel">AI Submission Clusters</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="aiClusterModalBody">
+                <!-- Clusters will be loaded here dynamically -->
+            </div>
+            <div class="modal-footer">
+                <div class="text-muted fst-italic small me-auto">
+                    AI-generated suggestions. Final grading authority remains with the instructor.
+                </div>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Create Classroom Modal -->
 <div class="modal fade" id="createClassroomModal" tabindex="-1" aria-labelledby="createClassroomModalLabel"
      aria-hidden="true">
@@ -1469,6 +1495,20 @@
     </div>
 </div>
 
+<!-- Toast Container for Notifications -->
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index: 1100">
+    <div id="liveToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="toast-header">
+            <i class="fas fa-check-circle text-success me-2"></i>
+            <strong class="me-auto">Success</strong>
+            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+        <div class="toast-body">
+            <!-- Message will be inserted here -->
+        </div>
+    </div>
+</div>
+
 <!-- Override Score Modal -->
 <div class="modal fade" id="overrideModal" tabindex="-1" aria-labelledby="overrideModalLabel" aria-hidden="true">
     <div class="modal-dialog">
@@ -1502,6 +1542,186 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const clusterModalEl = document.getElementById('aiClusterModal');
+        if (!clusterModalEl) return;
+
+        const clusterModal = new bootstrap.Modal(clusterModalEl);
+        const modalBody = document.getElementById('aiClusterModalBody');
+        const modalTitle = document.getElementById('aiClusterModalLabel');
+        let currentAssignmentId = null;
+
+        function fetchAndDisplayClusters(assignmentId) {
+            currentAssignmentId = assignmentId;
+            modalTitle.textContent = `AI Submission Clusters for Assignment #${assignmentId}`;
+            modalBody.innerHTML = `<div class="d-flex justify-content-center align-items-center" style="min-height: 200px;"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div><strong class="ms-3">Analyzing submissions...</strong></div>`;
+
+            fetch(`/teacher/assignment/${assignmentId}/clusters`)
+                .then(response => {
+                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.error) {
+                        modalBody.innerHTML = `<div class="alert alert-danger"><strong>Error:</strong> ${data.error}</div>`;
+                        return;
+                    }
+                    if (data.length === 0) {
+                        modalBody.innerHTML = `<div class="alert alert-info">No clusters were generated or not enough submissions.</div>`;
+                        return;
+                    }
+
+                    let content = '<div class="accordion" id="clusterAccordion">';
+                    data.forEach((clusterGroup, index) => {
+                        const submissionIds = clusterGroup.submissions.map(sub => sub.id);
+                        const conceptualSummary = clusterGroup.conceptual_summary;
+                        const otherClusters = data.filter(c => c.id !== clusterGroup.id);
+
+                        content += `
+                            <div class="accordion-item" data-cluster-id="${clusterGroup.id}">
+                                <h2 class="accordion-header" id="heading${index}">
+                                    <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapse${index}" aria-expanded="true" aria-controls="collapse${index}">
+                                        ${clusterGroup.name} (${clusterGroup.submissions.length} submissions)
+                                    </button>
+                                </h2>
+                                <div id="collapse${index}" class="accordion-collapse collapse show" aria-labelledby="heading${index}" data-bs-parent="#clusterAccordion">
+                                    <div class="accordion-body">
+                                        <p class="fst-italic text-muted"><strong>AI Summary:</strong> ${conceptualSummary}</p>
+                                        <ul class="list-group mb-3">
+                                            ${clusterGroup.submissions.map(sub => `
+                                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                    <div>
+                                                        <strong>${sub.student_name}:</strong>
+                                                        <p class="mb-0">${sub.answer_text}</p>
+                                                    </div>
+                                                    <div class="dropdown">
+                                                        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">Move</button>
+                                                        <ul class="dropdown-menu">
+                                                            ${otherClusters.map(oc => `<li><a class="dropdown-item move-submission-btn" href="#" data-submission-id="${sub.id}" data-new-cluster-id="${oc.id}">To ${oc.name}</a></li>`).join('')}
+                                                            <li><hr class="dropdown-divider"></li>
+                                                            <li><a class="dropdown-item remove-submission-btn" href="#" data-submission-id="${sub.id}">Remove from Group</a></li>
+                                                        </ul>
+                                                    </div>
+                                                </li>`).join('')}
+                                        </ul>
+                                        <div class="mt-3 p-3 bg-light border rounded">
+                                            <h5>Grade this Group</h5>
+                                            <form class="grade-group-form" data-submission-ids='${JSON.stringify(submissionIds)}'>
+                                                <div class="mb-3">
+                                                    <label for="score-${index}" class="form-label">Score</label>
+                                                    <input type="number" id="score-${index}" class="form-control" name="score" step="0.1" required>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label for="comment-${index}" class="form-label">Feedback Comment</label>
+                                                    <textarea id="comment-${index}" class="form-control" name="comment" rows="3">${conceptualSummary}</textarea>
+                                                </div>
+                                                <button type="submit" class="btn btn-primary btn-sm">
+                                                    <i class="fas fa-check-double me-1"></i> Apply Grade to Group
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>`;
+                    });
+                    content += '</div>';
+                    modalBody.innerHTML = content;
+                })
+                .catch(error => {
+                    modalBody.innerHTML = `<div class="alert alert-danger"><strong>Error:</strong> Could not fetch clusters. ${error.message}</div>`;
+                });
+        }
+
+        document.body.addEventListener('click', function(event) {
+            const button = event.target.closest('.view-clusters-btn');
+            if (button) {
+                const originalHtml = button.innerHTML;
+                button.disabled = true;
+                button.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Loading...`;
+
+                const assignmentId = button.dataset.assignmentId;
+                fetchAndDisplayClusters(assignmentId).finally(() => {
+                    button.disabled = false;
+                    button.innerHTML = originalHtml;
+                });
+                clusterModal.show();
+            }
+        });
+
+        modalBody.addEventListener('click', function(event) {
+            const target = event.target;
+            let action = null;
+            let url = '';
+            let body = {};
+
+            if (target.classList.contains('move-submission-btn')) {
+                event.preventDefault();
+                url = '/teacher/cluster/move_submission';
+                body = { submission_id: target.dataset.submissionId, new_cluster_id: target.dataset.newClusterId };
+            } else if (target.classList.contains('remove-submission-btn')) {
+                event.preventDefault();
+                url = '/teacher/cluster/remove_submission';
+                body = { submission_id: target.dataset.submissionId };
+            }
+
+            if (url) {
+                fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        alert(`Error: ${data.error}`);
+                    } else {
+                        fetchAndDisplayClusters(currentAssignmentId);
+                    }
+                })
+                .catch(error => alert(`An error occurred: ${error.message}`));
+            }
+        });
+
+        modalBody.addEventListener('submit', function(event) {
+            if (event.target.classList.contains('grade-group-form')) {
+                event.preventDefault();
+                const form = event.target;
+                const submissionIds = JSON.parse(form.dataset.submissionIds);
+                const score = form.querySelector('input[name="score"]').value;
+                const comment = form.querySelector('textarea[name="comment"]').value;
+                const submitButton = form.querySelector('button[type="submit"]');
+
+                submitButton.disabled = true;
+                submitButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Grading...';
+
+                fetch('/teacher/grade_group', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ submission_ids: submissionIds, score: score, comment: comment })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        alert(`Error: ${data.error}`);
+                        submitButton.disabled = false;
+                        submitButton.innerHTML = '<i class="fas fa-check-double me-1"></i> Apply Grade to Group';
+                    } else {
+                        showToast(data.message);
+                        clusterModal.hide();
+                        // Refresh the page after a short delay to allow toast to be seen
+                        setTimeout(() => window.location.reload(), 2000);
+                    }
+                })
+                .catch(error => {
+                    alert(`An error occurred: ${error.message}`);
+                    submitButton.disabled = false;
+                    submitButton.innerHTML = '<i class="fas fa-check-double me-1"></i> Apply Grade to Group';
+                });
+            }
+        });
+    });
+</script>
 <script>
 
     function toggleProfileDropdown() {
@@ -1573,6 +1793,14 @@
                 expArea.required = false;
             }
         }
+    }
+
+        const toastEl = document.getElementById('liveToast');
+    const toast = new bootstrap.Toast(toastEl);
+
+    function showToast(message) {
+        toastEl.querySelector('.toast-body').textContent = message;
+        toast.show();
     }
 
     const overrideModalEl = document.getElementById('overrideModal');
