@@ -17,6 +17,7 @@ import io
 import uuid  # For invite codes
 from datetime import datetime, timedelta
 import html  # For HTML escaping
+import csv
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -25,7 +26,7 @@ from reportlab.lib import colors
 from reportlab.lib.units import inch
 import json
 from dotenv import load_dotenv
-from forms import TeacherRegistrationForm
+from forms import TeacherRegistrationForm, StudentRegistrationForm
 from flask_wtf.csrf import CSRFProtect
 
 load_dotenv()
@@ -160,10 +161,14 @@ def _generate_and_save_clusters(assignment_id):
     2. 'conceptual_summary': A string explaining the group's shared concept.
     """
 
-    response = gemini_model.generate_content(prompt)
-    raw_text = _sanitize_gemini_response(response.text)
-    parsed_json = json.loads(raw_text)
-    grouped_results = parsed_json if isinstance(parsed_json, dict) else {"groups": parsed_json}
+    try:
+        response = gemini_model.generate_content(prompt)
+        raw_text = _sanitize_gemini_response(response.text)
+        parsed_json = json.loads(raw_text)
+        grouped_results = parsed_json if isinstance(parsed_json, dict) else {"groups": parsed_json}
+    except Exception as e:
+        # This will catch API errors, JSON parsing errors, etc.
+        return f"Error during AI processing: {str(e)}"
 
     with db.session.begin_nested():
         for i, group in enumerate(grouped_results.get('groups', [])):
@@ -209,6 +214,124 @@ def cluster_assignment(assignment_id):
         flash(f'An error occurred during clustering: {str(e)}', 'danger')
 
     return redirect(url_for('teacher_dashboard', active_tab='evaluation-hub', filter_assignment_id=assignment_id))
+
+
+@app.route('/teacher/assignment/<int:assignment_id>/clusters')
+def get_assignment_clusters(assignment_id):
+    if not session.get('teacher_logged_in'):
+        return jsonify({'error': 'Authentication required'}), 401
+
+    assignment = Assignment.query.filter_by(id=assignment_id, teacher_id=session['teacher_id']).first_or_404()
+    
+    clusters = Cluster.query.filter_by(assignment_id=assignment.id).order_by(Cluster.name).all()
+    
+    cluster_data = []
+    for cluster in clusters:
+        submissions_data = []
+        for cs in cluster.submissions:
+            submission = cs.submission
+            submissions_data.append({
+                'id': submission.id,
+                'answer_text': submission.answer_text,
+                'student_name': submission.student.full_name
+            })
+        
+        cluster_data.append({
+            'id': cluster.id,
+            'name': cluster.name,
+            'conceptual_summary': cluster.conceptual_summary,
+            'submissions': submissions_data
+        })
+        
+    return jsonify(cluster_data)
+
+
+@app.route('/teacher/cluster/move_submission', methods=['POST'])
+def move_submission_to_cluster():
+    if not session.get('teacher_logged_in'):
+        return jsonify({'error': 'Authentication required'}), 401
+
+    data = request.get_json()
+    submission_id = data.get('submission_id')
+    new_cluster_id = data.get('new_cluster_id')
+
+    if not submission_id or not new_cluster_id:
+        return jsonify({'error': 'Missing data'}), 400
+
+    clustered_submission = ClusteredSubmission.query.filter_by(submission_id=submission_id).first_or_404()
+    submission = Submission.query.get_or_404(submission_id)
+    new_cluster = Cluster.query.get_or_404(new_cluster_id)
+
+    # Authorization check
+    if submission.assignment.teacher_id != session['teacher_id'] or new_cluster.assignment.teacher_id != session['teacher_id']:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    clustered_submission.cluster_id = new_cluster_id
+    db.session.commit()
+
+    return jsonify({'success': True, 'message': 'Submission moved successfully.'})
+
+@app.route('/teacher/cluster/remove_submission', methods=['POST'])
+def remove_submission_from_cluster():
+    if not session.get('teacher_logged_in'):
+        return jsonify({'error': 'Authentication required'}), 401
+
+    data = request.get_json()
+    submission_id = data.get('submission_id')
+
+    if not submission_id:
+        return jsonify({'error': 'Missing data'}), 400
+
+    clustered_submission = ClusteredSubmission.query.filter_by(submission_id=submission_id).first_or_404()
+    submission = Submission.query.get_or_404(submission_id)
+
+    # Authorization check
+    if submission.assignment.teacher_id != session['teacher_id']:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    db.session.delete(clustered_submission)
+    db.session.commit()
+
+    return jsonify({'success': True, 'message': 'Submission removed from cluster.'})
+
+
+@app.route('/teacher/grade_group', methods=['POST'])
+def grade_group():
+    if not session.get('teacher_logged_in'):
+        return jsonify({'error': 'Authentication required'}), 401
+
+    data = request.get_json()
+    submission_ids = data.get('submission_ids', [])
+    score = data.get('score')
+    feedback = data.get('feedback', '')
+
+    if not submission_ids or score is None:
+        return jsonify({'error': 'Missing data'}), 400
+
+    try:
+        score = float(score)
+        submissions = Submission.query.filter(Submission.id.in_(submission_ids)).all()
+        
+        if not submissions:
+            return jsonify({'error': 'No submissions found'}), 404
+
+        # Authorization check on the first submission
+        if submissions[0].assignment.teacher_id != session['teacher_id']:
+            return jsonify({'error': 'Unauthorized'}), 403
+
+        for sub in submissions:
+            sub.score = score
+            sub.gemini_comment = feedback
+            sub.evaluated_at = datetime.utcnow()
+        
+        db.session.commit()
+        return jsonify({'success': True, 'message': f'{len(submissions)} submissions graded successfully.'})
+
+    except ValueError:
+        return jsonify({'error': 'Invalid score format'}), 400
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'An unexpected error occurred: {str(e)}'}), 500
 
 
 @app.route('/teacher/assignment/<int:assignment_id>/recluster', methods=['POST'])
@@ -303,6 +426,33 @@ def admin_logout():
     return redirect(url_for('index'))
 
 
+# Student Routes
+@app.route('/student/register', methods=['GET', 'POST'])
+def student_register():
+    form = StudentRegistrationForm()
+    form.university.choices = [(uni, uni) for uni in UNIVERSITIES]
+    form.department.choices = [(dep, dep) for dep in DEPARTMENTS]
+    form.year.choices = [(i, f'Year {i}') for i in range(1, 5)]
+
+    if form.validate_on_submit():
+        hashed_password = hash_password(form.password.data)
+        new_student = Student(
+            username=form.username.data,
+            email=form.email.data,
+            password=hashed_password,
+            full_name=form.full_name.data,
+            roll_number=form.roll_number.data,
+            university=form.university.data,
+            department=form.department.data,
+            year=form.year.data
+        )
+        db.session.add(new_student)
+        db.session.commit()
+        flash(f'Account created for {form.full_name.data}! You can now log in.', 'success')
+        return redirect(url_for('login', role='student'))
+    return render_template('student_register.html', title='Student Register', form=form)
+
+
 # Teacher Routes
 @app.route('/teacher/register', methods=['GET', 'POST'])
 def teacher_register():
@@ -375,7 +525,8 @@ def teacher_dashboard():
                 Assignment.classroom_id == filter_classroom_id)
         active_assignments_list = active_assignments_list_query.order_by(Assignment.submission_deadline.asc()).all()
 
-        total_enrollments = sum(c.enrollments_count for c in classrooms)
+        classroom_ids = [c.id for c in classrooms]
+        total_enrollments = db.session.query(func.count(Enrollment.id)).filter(Enrollment.classroom_id.in_(classroom_ids)).scalar() if classroom_ids else 0
         assignment_ids_by_teacher = [a.id for a in teacher.assignments.all()]
 
         pending_submissions_query = Submission.query.filter(
@@ -532,12 +683,7 @@ def student_login():
         student = Student.query.filter_by(username=username).first()
         if student and student.password == hash_password(password):
             session['student_logged_in'], session['student_id'] = True, student.id
-            flash('Student login successful!', 'success');
-def student_dashboard():
-    if not session.get('student_logged_in'):
-        flash('Please log in as a student.', 'warning')
-        return redirect(url_for('login', role='student'))
-    try:
+            flash('Student login successful!', 'success')
         student_id = session['student_id']
         student = Student.query.get_or_404(student_id)
 
@@ -588,6 +734,32 @@ def student_dashboard():
         return redirect(url_for('login', role='student'))
 
 
+@app.route('/teacher/enrollment/<int:enrollment_id>/handle', methods=['POST'])
+def handle_enrollment(enrollment_id):
+    if not session.get('teacher_logged_in'):
+        flash('Authentication required.', 'danger')
+        return redirect(url_for('login', role='teacher'))
+
+    enrollment = Enrollment.query.get_or_404(enrollment_id)
+    if enrollment.classroom.teacher_id != session['teacher_id']:
+        flash('You are not authorized to manage this enrollment.', 'danger')
+        return redirect(url_for('teacher_dashboard'))
+
+    action = request.form.get('action')
+    if action == 'approve':
+        enrollment.is_approved = True
+        db.session.commit()
+        flash(f'Student {enrollment.student.full_name} approved for {enrollment.classroom.name}.', 'success')
+    elif action == 'reject':
+        db.session.delete(enrollment)
+        db.session.commit()
+        flash(f'Student {enrollment.student.full_name} rejected for {enrollment.classroom.name}.', 'info')
+    else:
+        flash('Invalid action.', 'danger')
+
+    return redirect(url_for('teacher_dashboard', active_tab='classroom-manager'))
+
+
 @app.route('/student/join_classroom', methods=['GET', 'POST'])
 def student_join_classroom():
     if not session.get('student_logged_in'):
@@ -623,6 +795,10 @@ def student_join_classroom():
             flash(f'An unexpected error occurred: {str(e)}', 'danger')
             
     return render_template('student_join_classroom.html', student=student)
+
+
+@app.route('/student/assignment/<int:assignment_id>/submit', methods=['GET', 'POST'])
+def submit_assignment(assignment_id):
     if not session.get('student_logged_in'):
         flash('Please log in to submit.', 'warning')
         return redirect(url_for('login', role='student'))
@@ -686,6 +862,44 @@ def student_submission_history(assignment_id):
     return render_template('student_submission_history.html', assignment=assignment, submission=submission)
 
 
+@app.route('/teacher/assignment/<int:assignment_id>/export_grades')
+def export_assignment_grades(assignment_id):
+    if not session.get('teacher_logged_in'):
+        flash('Authentication required.', 'danger')
+        return redirect(url_for('login', role='teacher'))
+
+    teacher_id = session['teacher_id']
+    assignment = Assignment.query.filter_by(id=assignment_id, teacher_id=teacher_id).first_or_404()
+
+    submissions = db.session.query(Submission, Student).join(Student, Submission.student_id == Student.id).filter(
+        Submission.assignment_id == assignment_id
+    ).order_by(Student.full_name).all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    writer.writerow(['Student Name', 'Student Username', 'Score', 'Max Score', 'Submitted At (UTC)', 'Evaluated At (UTC)'])
+
+    for submission, student in submissions:
+        writer.writerow([
+            student.full_name,
+            student.username,
+            submission.display_score if submission.display_score is not None else 'N/A',
+            assignment.max_score,
+            submission.submitted_at.strftime('%Y-%m-%d %H:%M:%S') if submission.submitted_at else 'N/A',
+            submission.evaluated_at.strftime('%Y-%m-%d %H:%M:%S') if submission.evaluated_at else 'N/A'
+        ])
+
+    output.seek(0)
+
+    return send_file(
+        io.BytesIO(output.getvalue().encode('utf-8')),
+        mimetype='text/csv',
+        as_attachment=True,
+        download_name=f'{secure_filename(assignment.title)}_grades.csv'
+    )
+
+
 @app.route('/teacher/report/assignment/<int:assignment_id>')
 def teacher_report_assignment(assignment_id):
     if not session.get('teacher_logged_in'): return redirect(url_for('login', role='teacher'))
@@ -718,8 +932,12 @@ def teacher_analytics():
     
     assignment_ids = [a.id for a in teacher.assignments]
     
+    total_enrollments = db.session.query(func.count(distinct(Enrollment.student_id))).filter(Enrollment.classroom_id.in_([c.id for c in teacher.classrooms])).scalar() or 0
+    total_possible_submissions = total_enrollments * len(assignment_ids) if assignment_ids else 0
+
     total_submissions = Submission.query.filter(Submission.assignment_id.in_(assignment_ids)).count()
     evaluated_submissions = Submission.query.filter(Submission.assignment_id.in_(assignment_ids), Submission.evaluated_at != None).count()
+    not_submitted = total_possible_submissions - total_submissions
     
     # Get evaluation method breakdown
     ai_evaluations = Submission.query.join(Assignment).filter(
@@ -745,6 +963,7 @@ def teacher_analytics():
         'total_submissions': total_submissions,
         'evaluated_submissions': evaluated_submissions,
         'pending_evaluations': total_submissions - evaluated_submissions,
+        'not_submitted': not_submitted,
         'ai_evaluations': ai_evaluations,
         'manual_evaluations': manual_evaluations,
         'avg_score': avg_score,

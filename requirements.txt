@@ -6,3 +6,4 @@ Pillow
 reportlab
 Flask-WTF
 email_validator
+gunicorn

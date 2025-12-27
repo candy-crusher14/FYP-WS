@@ -1,253 +1,87 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Student Registration - AI Assignment Evaluator</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+{% extends "layout.html" %}
+{% block title %}Student Registration{% endblock %}
 
-        :root {
-            --primary-blue: #3498db;
-            --primary-green: #2ecc71;
-            --primary-purple: #9b59b6;
-            --light-gray: #f5f7fa;
-            --medium-gray: #e0e7ee;
-            --dark-gray: #34495e;
-            --text-dark: #2c3e50;
-            --text-light: #7f8c8d;
-            --success: #2ecc71;
-            --warning: #f39c12;
-            --danger: #e74c3c;
-            --shadow-sm: 0 4px 6px rgba(0, 0, 0, 0.1);
-            --shadow-md: 0 8px 15px rgba(0, 0, 0, 0.1);
-            --shadow-lg: 0 15px 30px rgba(0, 0, 0, 0.1);
-            --transition: all 0.3s ease;
-        }
+{% block content %}
+<div class="auth-container">
+    <div class="auth-form">
+        <h2>Student Registration</h2>
+        <p>Create your student account to get started</p>
 
-        body {
-            font-family: 'Poppins', sans-serif;
-            color: var(--text-dark);
-            background-color: var(--light-gray);
-            line-height: 1.6;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            padding: 20px;
-        }
-
-        .auth-container {
-            width: 100%;
-            max-width: 500px;
-        }
-
-        .auth-form {
-            background-color: white;
-            border-radius: 15px;
-            padding: 40px;
-            box-shadow: var(--shadow-lg);
-            border: 1px solid var(--medium-gray);
-        }
-
-        .auth-form h2 {
-            font-size: 1.8rem;
-            margin-bottom: 10px;
-            text-align: center;
-            color: var(--text-dark);
-        }
-
-        .auth-form p {
-            color: var(--text-light);
-            text-align: center;
-            margin-bottom: 25px;
-            font-size: 1rem;
-        }
-
-        .form-group {
-            margin-bottom: 18px;
-        }
-
-        .form-group label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 500;
-            color: var(--text-dark);
-            font-size: 0.95rem;
-        }
-
-        .form-control {
-            width: 100%;
-            padding: 14px;
-            border: 2px solid var(--medium-gray);
-            border-radius: 10px;
-            font-size: 1rem;
-            transition: var(--transition);
-            font-family: 'Poppins', sans-serif;
-        }
-
-        .form-control:focus {
-            border-color: var(--primary-blue);
-            outline: none;
-            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2);
-        }
-
-        .submit-btn {
-            width: 100%;
-            padding: 14px;
-            background-color: var(--primary-blue);
-            color: white;
-            border: none;
-            border-radius: 10px;
-            font-size: 1.05rem;
-            font-weight: 500;
-            cursor: pointer;
-            transition: var(--transition);
-            margin-top: 15px;
-        }
-
-        .submit-btn:hover {
-            background-color: #2980b9;
-            box-shadow: var(--shadow-md);
-        }
-
-        .auth-footer {
-            text-align: center;
-            margin-top: 20px;
-            color: var(--text-light);
-            font-size: 0.95rem;
-        }
-
-        .auth-footer a {
-            color: var(--primary-blue);
-            text-decoration: none;
-            font-weight: 500;
-        }
-
-        .auth-footer a:hover {
-            text-decoration: underline;
-        }
-
-        .error-message {
-            color: var(--danger);
-            font-size: 0.9rem;
-            margin-top: 5px;
-        }
-    </style>
-</head>
-<body>
-    <!-- Flash Messages -->
-    {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-    <div style="position: fixed; top: 20px; right: 20px; z-index: 9999;">
-        {% for category, message in messages %}
-        <div class="alert alert-{{ category if category != 'message' else 'info' }}" style="margin-bottom: 10px; min-width: 300px; padding: 12px 20px; border-radius: 8px; border-left: 4px solid; box-shadow: 0 8px 15px rgba(0, 0, 0, 0.1);">
-            {{ message }}
-            <button type="button" onclick="this.parentElement.remove()" style="background: none; border: none; font-size: 1.2rem; cursor: pointer; margin-left: auto; float: right;">&times;</button>
-        </div>
-        {% endfor %}
-    </div>
-    <style>
-        .alert-success { background-color: #d4edda; border-color: var(--success); color: #155724; }
-        .alert-danger { background-color: #f8d7da; border-color: var(--danger); color: #721c24; }
-        .alert-warning { background-color: #fff3cd; border-color: var(--warning); color: #856404; }
-        .alert-info { background-color: #d1ecf1; border-color: var(--primary-blue); color: #0c5460; }
-    </style>
-    {% endif %}
-    {% endwith %}
-
-    <div class="auth-container">
-        <div class="auth-form">
-            <h2>Student Registration</h2>
-            <p>Create your student account</p>
-
-            {% if error %}
-                <div style="color: var(--danger); margin-bottom: 20px; text-align: center;">
-                    <i class="fas fa-exclamation-circle"></i> {{ error }}
-                </div>
-            {% endif %}
-
-            <form method="POST" action="{{ url_for('student_register') }}">
-                <div class="form-group">
-                    <label for="username">Username</label>
-                    <input type="text" id="username" name="username" class="form-control" placeholder="Choose a username" required>
-                </div>
-                <div class="form-group">
-                    <label for="password">Password</label>
-                    <input type="password" id="password" name="password" class="form-control" placeholder="••••••••" required>
-                </div>
-                <div class="form-group">
-                    <label for="confirm_password">Confirm Password</label>
-                    <input type="password" id="confirm_password" name="confirm_password" class="form-control" placeholder="••••••••" required>
-                </div>
-                <div class="form-group">
-                    <label for="full_name">Full Name</label>
-                    <input type="text" id="full_name" name="full_name" class="form-control" placeholder="Your full name" required>
-                </div>
-                <div class="form-group">
-                    <label for="email">Email</label>
-                    <input type="email" id="email" name="email" class="form-control" placeholder="your.email@example.com" required>
-                </div>
-                <div class="form-group">
-                    <label for="roll_number">Roll Number</label>
-                    <input type="text" id="roll_number" name="roll_number" class="form-control" placeholder="Enter your roll number" required>
-                </div>
-                <div class="form-group">
-                    <label for="university">University</label>
-                    <select id="university" name="university_id" class="form-control" required>
-                        <option disabled selected value="">-- Select University --</option>
-                        {% for uni in universities %}
-                        <option value="{{ uni.id }}">{{ uni.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="department">Select Department</label>
-                    <select id="department" name="department" class="form-control" required>
-                        <option disabled selected value="">-- Select Department --</option>
-                        {% for department in departments %}
-                        <option value="{{ department }}">{{ department }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="year">Academic Year</label>
-                    <select id="year" name="year" class="form-control" required>
-                        <option disabled selected value="">-- Select Year --</option>
-                        <option value="1">1st Year</option>
-                        <option value="2">2nd Year</option>
-                        <option value="3">3rd Year</option>
-                        <option value="4">4th Year</option>
-                    </select>
-                </div>
-                <button type="submit" class="submit-btn">Create Account</button>
-            </form>
-
-            <div class="auth-footer">
-                <p>Already have an account? <a href="/login">Sign In</a></p>
-                <p>Are you a teacher? <a href="/teacher/register">Register as Teacher</a></p>
+        <form method="POST" action="" novalidate>
+            {{ form.hidden_tag() }}
+            <div class="form-group">
+                {{ form.username.label(class="form-label") }}
+                {{ form.username(class="form-control", placeholder="Choose a unique username") }}
+                {% if form.username.errors %}
+                    <div class="error-message">{{ form.username.errors[0] }}</div>
+                {% endif %}
             </div>
+            <div class="form-group">
+                {{ form.email.label(class="form-label") }}
+                {{ form.email(class="form-control", placeholder="your.email@example.com") }}
+                {% if form.email.errors %}
+                    <div class="error-message">{{ form.email.errors[0] }}</div>
+                {% endif %}
+            </div>
+            <div class="form-group">
+                {{ form.password.label(class="form-label") }}
+                {{ form.password(class="form-control", placeholder="••••••••") }}
+                {% if form.password.errors %}
+                    <div class="error-message">{{ form.password.errors[0] }}</div>
+                {% endif %}
+            </div>
+            <div class="form-group">
+                {{ form.confirm_password.label(class="form-label") }}
+                {{ form.confirm_password(class="form-control", placeholder="••••••••") }}
+                {% if form.confirm_password.errors %}
+                    <div class="error-message">{{ form.confirm_password.errors[0] }}</div>
+                {% endif %}
+            </div>
+            <hr class="my-3">
+            <div class="form-group">
+                {{ form.full_name.label(class="form-label") }}
+                {{ form.full_name(class="form-control", placeholder="Your full name") }}
+                {% if form.full_name.errors %}
+                    <div class="error-message">{{ form.full_name.errors[0] }}</div>
+                {% endif %}
+            </div>
+            <div class="form-group">
+                {{ form.roll_number.label(class="form-label") }}
+                {{ form.roll_number(class="form-control", placeholder="e.g., 20CS01") }}
+                {% if form.roll_number.errors %}
+                    <div class="error-message">{{ form.roll_number.errors[0] }}</div>
+                {% endif %}
+            </div>
+            <div class="form-group">
+                {{ form.university.label(class="form-label") }}
+                {{ form.university(class="form-control") }}
+                {% if form.university.errors %}
+                    <div class="error-message">{{ form.university.errors[0] }}</div>
+                {% endif %}
+            </div>
+            <div class="form-group">
+                {{ form.department.label(class="form-label") }}
+                {{ form.department(class="form-control") }}
+                {% if form.department.errors %}
+                    <div class="error-message">{{ form.department.errors[0] }}</div>
+                {% endif %}
+            </div>
+            <div class="form-group">
+                {{ form.year.label(class="form-label") }}
+                {{ form.year(class="form-control") }}
+                {% if form.year.errors %}
+                    <div class="error-message">{{ form.year.errors[0] }}</div>
+                {% endif %}
+            </div>
+            <div class="form-group">
+                {{ form.submit(class="submit-btn") }}
+            </div>
+        </form>
+
+        <div class="auth-footer">
+            <p>Already have an account? <a href="{{ url_for('login', role='student') }}">Sign In</a></p>
+            <p>Are you a teacher? <a href="{{ url_for('teacher_register') }}">Register as Teacher</a></p>
         </div>
     </div>
-
-    <script>
-        const form = document.querySelector('form');
-        form.addEventListener('submit', function(e) {
-            const password = document.getElementById('password');
-            const confirmPassword = document.getElementById('confirm_password');
-
-            if (password.value !== confirmPassword.value) {
-                e.preventDefault();
-                alert('Passwords do not match!');
-                confirmPassword.focus();
-            }
-        });
-    </script>
-</body>
-</html>
+</div>
+{% endblock %}

@@ -16,27 +16,15 @@ def hash_password(password):
 def seed_test_data():
     """Wipes and seeds the database with a full testing environment."""
     print("Wiping all existing test data...")
-    # Wipe data in reverse order of dependency
-    db.session.query(Enrollment).delete()
-    db.session.query(Submission).delete()
-    db.session.query(AppliedRubricItem).delete()
-    db.session.query(RubricItem).delete()
-    db.session.query(Rubric).delete()
-    db.session.query(Assignment).delete()
-    db.session.query(Classroom).delete()
-    db.session.query(Course).delete()
-    # Clear the association table
-    db.session.execute(text('DELETE FROM teacher_department_association'))
-    db.session.query(Department).delete()
-    db.session.query(University).delete()
-    db.session.query(Student).delete()
-    db.session.query(Teacher).delete()
-    db.session.query(Admin).delete()
-    db.session.commit()
-    print("All tables wiped.")
-    print("Wiping all existing test data...")
-    # Wipe data in reverse order of dependency
-    db.session.query(Enrollment).delete()
+    # In a production environment with foreign keys, this order is crucial.
+    # For SQLite, `db.drop_all()` and `db.create_all()` is more robust.
+    try:
+        db.drop_all()
+        db.create_all()
+        print("All tables dropped and recreated.")
+    except Exception as e:
+        print(f"Error wiping database: {e}")
+        db.session.rollback()
     db.session.query(Submission).delete()
     db.session.query(AppliedRubricItem).delete()
     db.session.query(RubricItem).delete()
@@ -196,23 +184,10 @@ def seed_demo():
         print("Created Demo University and Data Science Department.")
 
         # 2. Create Demo Accounts
-        # Admin
-        admin = Admin.query.filter_by(email='admin@demo.com').first()
-        if not admin:
-            admin = Admin(username='admin_demo', email='admin@demo.com', password=hash_password('password123'), full_name='Demo Admin', role='super_admin')
-            db.session.add(admin)
-            print("Created admin@demo.com")
-        db.session.commit()
-        dept = Department(name='Data Science', university_id=uni.id)
-        db.session.add(dept)
-        db.session.commit()
-        print("Created Demo University and Data Science Department.")
-
-        # 2. Create Golden Accounts
-        admin = Admin(username='admin_demo', email='admin@demo.com', password=hash_password('password123'), full_name='Demo Admin', role='super_admin')
+        admin = Admin(username='admin_demo', email='admin@demo.com', password=hash_password('password123'), full_name='Demo Admin')
         teacher = Teacher(username='teacher_demo', email='teacher@demo.com', password=hash_password('password123'), full_name='Dr. Demo', university_id=uni.id, is_approved=True)
         teacher.departments.append(dept)
-        student_user = Student(username='student_demo', email='student@demo.com', password=hash_password('password123'), full_name='Demo Student', university_id=uni.id, department=dept.name, year=3, roll_number='DEMO001')
+        student_user = Student(username='student_demo', email='student@demo.com', password=hash_password('password123'), full_name='Demo Student', university=uni.name, department=dept.name, year=3, roll_number='DEMO001')
         db.session.add_all([admin, teacher, student_user])
         db.session.commit()
         print("Created Golden Accounts: admin@demo.com, teacher@demo.com, student@demo.com")
@@ -249,8 +224,14 @@ def seed_demo():
         ]
         
         submissions = []
+        # Add the main demo student to the list of submissions to be created
+        all_students_for_submissions = [(student_user, {'answer': 'A perceptron is a single-layer neural network, whereas a multi-layer perceptron (MLP) has multiple layers, including hidden layers. The activation function introduces non-linearity, allowing the MLP to learn complex patterns that a simple perceptron cannot.'})]
+
         for i, data in enumerate(student_answers):
-            student = Student(username=f'demo_student_{i}', email=f'demo{i}@demo.edu', password=hash_password('password123'), full_name=data['name'], university_id=uni.id, department=dept.name, year=3, roll_number=f'DEMO{100+i}')
+            student = Student(username=f'demo_student_{i}', email=f'demo{i}@demo.edu', password=hash_password('password123'), full_name=data['name'], university=uni.name, department=dept.name, year=3, roll_number=f'DEMO{100+i}')
+            all_students_for_submissions.append((student, data))
+
+        for student, data in all_students_for_submissions:
             db.session.add(student)
             db.session.commit()
             enrollment = Enrollment(student_id=student.id, classroom_id=classroom.id, is_approved=True)
@@ -276,10 +257,19 @@ def seed_demo():
             cluster3: [4, 5, 7]       # Eric, Fiona, Hannah
         }
 
+        # The main 'student_demo' will be the first in the submissions list
+        main_demo_submission_index = 0 
+
         for cluster, submission_indices in cluster_mappings.items():
             for index in submission_indices:
-                clustered_sub = ClusteredSubmission(cluster_id=cluster.id, submission_id=submissions[index].id)
+                # Adjust index to account for the main demo student added at the beginning
+                submission_to_cluster = submissions[index + 1] 
+                clustered_sub = ClusteredSubmission(cluster_id=cluster.id, submission_id=submission_to_cluster.id)
                 db.session.add(clustered_sub)
+        
+        # Add the main demo student's submission to the correct cluster
+        main_demo_submission = submissions[main_demo_submission_index]
+        db.session.add(ClusteredSubmission(cluster_id=cluster1.id, submission_id=main_demo_submission.id))
 
         db.session.commit()
         print("Manually created and linked 3 clusters for the demo assignment.")

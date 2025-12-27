@@ -1419,9 +1419,11 @@
         <div class="d-flex justify-content-end mb-3">
             {% set assignment = all_assignments_for_filter|selectattr('id', 'equalto', current_filter_assignment_id)|first %}
             {% if assignment and assignment.clusters|length > 0 %}
-                <form action="{{ url_for('recluster_assignment', assignment_id=current_filter_assignment_id) }}" method="POST" class="me-2">
-                    <button type="submit" class="btn btn-secondary"><i class="fas fa-sync-alt me-1"></i> Re-generate AI Clusters</button>
+                <form action="{{ url_for('recluster_assignment', assignment_id=current_filter_assignment_id) }}" method="POST" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    <button type="submit" class="btn btn-warning"><i class="fas fa-sync-alt me-1"></i> Re-cluster</button>
                 </form>
+                <a href="{{ url_for('export_assignment_grades', assignment_id=current_filter_assignment_id) }}" class="btn btn-success"><i class="fas fa-file-csv me-1"></i> Export Grades (CSV)</a>
             {% else %}
                 <form action="{{ url_for('cluster_assignment', assignment_id=current_filter_assignment_id) }}" method="POST" class="me-2">
                     <button type="submit" class="btn btn-primary"><i class="fas fa-brain me-1"></i> Generate AI Clusters</button>
@@ -1812,7 +1814,7 @@
     if (overrideModalEl) {
         overrideModalEl.addEventListener('show.bs.modal', function (event) {
             const btn = event.relatedTarget;
-            document.getElementById('overrideForm').action = `/teacher/override/${btn.getAttribute('data-submission-id')}`;
+            document.getElementById('overrideForm').action = `/teacher/submission/${btn.getAttribute('data-submission-id')}/override_score`;
             document.getElementById('overrideStudentName').textContent = btn.getAttribute('data-student-name') || 'N/A';
             document.getElementById('overrideAssignmentTitle').textContent = btn.getAttribute('data-assignment-title') || 'N/A';
             const newScoreIn = document.getElementById('newScoreModal'); // Corrected ID

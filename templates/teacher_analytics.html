@@ -346,11 +346,11 @@
         new Chart(submissionCtx, {
             type: 'bar',
             data: {
-                labels: ['Total Submissions', 'Evaluated', 'Pending'],
+                labels: ['Evaluated', 'Pending Evaluation', 'Not Submitted'],
                 datasets: [{
                     label: 'Count',
-                    data: [{{ analytics.total_submissions }}, {{ analytics.evaluated_submissions }}, {{ analytics.pending_evaluations }}],
-                    backgroundColor: ['#9b59b6', '#2ecc71', '#f39c12'],
+                    data: [{{ analytics.evaluated_submissions }}, {{ analytics.pending_evaluations }}, {{ analytics.not_submitted }}],
+                    backgroundColor: ['#2ecc71', '#f39c12', '#e74c3c'],
                     borderWidth: 0
                 }]
             },
