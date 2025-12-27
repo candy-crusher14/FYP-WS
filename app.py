@@ -25,6 +25,8 @@ from reportlab.lib import colors
 from reportlab.lib.units import inch
 import json
 from dotenv import load_dotenv
+from forms import TeacherRegistrationForm
+from flask_wtf.csrf import CSRFProtect
 
 load_dotenv()
 
@@ -32,6 +34,7 @@ warnings.filterwarnings("ignore")
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'default_secret_key_for_dev_123!@#')
+csrf = CSRFProtect(app)
 
 # File upload configuration
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
@@ -131,7 +134,7 @@ def _sanitize_gemini_response(raw_text):
 def _generate_and_save_clusters(assignment_id):
     """Helper function to generate and save clusters for a given assignment."""
     if not gemini_model:
-        raise Exception("Gemini model not configured.")
+        return "Error: Gemini model not configured."
 
     submissions = Submission.query.filter(
         Submission.assignment_id == assignment_id,
@@ -140,8 +143,7 @@ def _generate_and_save_clusters(assignment_id):
     ).all()
 
     if len(submissions) < 2:
-        print(f"Skipping cluster generation for assignment {assignment_id}: not enough submissions.")
-        return
+        return f"Skipped: Less than 2 submissions, no clustering needed."
 
     anonymous_data = {}
     id_map = {}
@@ -179,7 +181,60 @@ def _generate_and_save_clusters(assignment_id):
                 cs = ClusteredSubmission(cluster_id=new_cluster.id, submission_id=sub_id)
                 db.session.add(cs)
     db.session.commit()
-    print(f"Successfully generated and saved clusters for assignment {assignment_id}.")
+    return "Success"
+
+
+@app.route('/teacher/assignment/<int:assignment_id>/cluster', methods=['POST'])
+def cluster_assignment(assignment_id):
+    if not session.get('teacher_logged_in'):
+        flash('Authentication required.', 'danger')
+        return redirect(url_for('login', role='teacher'))
+    
+    assignment = Assignment.query.filter_by(id=assignment_id, teacher_id=session['teacher_id']).first_or_404()
+    
+    try:
+        # For now, we assume this is the first clustering. Re-clustering logic will be added later.
+        existing_clusters = Cluster.query.filter_by(assignment_id=assignment.id).count()
+        if existing_clusters > 0:
+            flash('This assignment has already been clustered.', 'info')
+        else:
+            result_message = _generate_and_save_clusters(assignment_id)
+            if result_message and 'Skipped' in result_message:
+                flash(f'Clustering skipped: Not enough submissions for this assignment.', 'warning')
+            elif result_message and 'Error' in result_message:
+                flash(f'An error occurred during clustering: {result_message}', 'danger')
+            else:
+                flash('Successfully generated AI clusters for the assignment!', 'success')
+    except Exception as e:
+        flash(f'An error occurred during clustering: {str(e)}', 'danger')
+
+    return redirect(url_for('teacher_dashboard', active_tab='evaluation-hub', filter_assignment_id=assignment_id))
+
+
+@app.route('/teacher/assignment/<int:assignment_id>/recluster', methods=['POST'])
+def recluster_assignment(assignment_id):
+    if not session.get('teacher_logged_in'):
+        flash('Authentication required.', 'danger')
+        return redirect(url_for('login', role='teacher'))
+
+    assignment = Assignment.query.filter_by(id=assignment_id, teacher_id=session['teacher_id']).first_or_404()
+
+    try:
+        # Delete existing clusters for this assignment
+        Cluster.query.filter_by(assignment_id=assignment.id).delete()
+        db.session.commit()
+
+        result_message = _generate_and_save_clusters(assignment_id)
+        if result_message and 'Skipped' in result_message:
+            flash(f'Re-clustering skipped: Not enough submissions for this assignment.', 'warning')
+        elif result_message and 'Error' in result_message:
+            flash(f'An error occurred during re-clustering: {result_message}', 'danger')
+        else:
+            flash('Successfully re-generated AI clusters for the assignment!', 'success')
+    except Exception as e:
+        flash(f'An error occurred during re-clustering: {str(e)}', 'danger')
+
+    return redirect(url_for('teacher_dashboard', active_tab='evaluation-hub', filter_assignment_id=assignment_id))
 
 
 # Routes
@@ -251,27 +306,25 @@ def admin_logout():
 # Teacher Routes
 @app.route('/teacher/register', methods=['GET', 'POST'])
 def teacher_register():
-    if request.method == 'POST':
-        username = request.form['username'].strip()
-        password = request.form['password']
-        full_name = request.form.get('full_name', '').strip()
-        email = request.form.get('email', '').strip().lower()
-        university_id = request.form.get('university_id')
+    form = TeacherRegistrationForm()
+    form.university_id.choices = [(u.id, u.name) for u in University.query.order_by('name').all()]
 
-        if not all([username, password, full_name, email, university_id]):
-            flash('All fields are required.', 'danger')
-        else:
-            new_teacher = Teacher(username=username, password=hash_password(password), full_name=full_name, email=email, is_approved=False)
-            university = University.query.get(university_id)
-            if university:
-                new_teacher.university = university
-            db.session.add(new_teacher)
-            db.session.commit()
-            flash(f'Hi {full_name}! Your teacher account is pending admin approval.', 'info');
-            return redirect(url_for('index'))
+    if form.validate_on_submit():
+        hashed_password = hash_password(form.password.data)
+        new_teacher = Teacher(
+            username=form.username.data,
+            email=form.email.data,
+            password=hashed_password,
+            full_name=form.full_name.data,
+            university_id=form.university_id.data,
+            is_approved=False
+        )
+        db.session.add(new_teacher)
+        db.session.commit()
+        flash(f'Hi {form.full_name.data}! Your teacher account is pending admin approval.', 'info')
+        return redirect(url_for('index'))
 
-    universities = University.query.order_by(University.name).all()
-    return render_template('teacher_register.html', universities=universities)
+    return render_template('teacher_register.html', form=form)
 
 
 @app.route('/teacher/login', methods=['GET', 'POST'])
@@ -616,6 +669,23 @@ def student_join_classroom():
     return render_template('submit_assignment.html', assignment=assignment, student=student)
 
 
+@app.route('/student/assignment/<int:assignment_id>/history')
+def student_submission_history(assignment_id):
+    if not session.get('student_logged_in'):
+        flash('Please log in to view your submission history.', 'warning')
+        return redirect(url_for('login', role='student'))
+
+    student_id = session['student_id']
+    assignment = Assignment.query.get_or_404(assignment_id)
+    submission = Submission.query.filter_by(student_id=student_id, assignment_id=assignment_id).first()
+
+    if not submission:
+        flash('You have not made a submission for this assignment.', 'info')
+        return redirect(url_for('student_dashboard'))
+
+    return render_template('student_submission_history.html', assignment=assignment, submission=submission)
+
+
 @app.route('/teacher/report/assignment/<int:assignment_id>')
 def teacher_report_assignment(assignment_id):
     if not session.get('teacher_logged_in'): return redirect(url_for('login', role='teacher'))
@@ -645,19 +715,19 @@ def teacher_analytics():
     # Get analytics data
     total_assignments = teacher.assignments.count()
     total_classrooms = teacher.classrooms.count()
-    total_submissions = db.session.query(Submission).join(Assignment).filter(Assignment.teacher_id == teacher_id).count()
-    evaluated_submissions = db.session.query(Submission).join(Assignment).filter(
-        Assignment.teacher_id == teacher_id, 
-        Submission.evaluated_at != None
-    ).count()
+    
+    assignment_ids = [a.id for a in teacher.assignments]
+    
+    total_submissions = Submission.query.filter(Submission.assignment_id.in_(assignment_ids)).count()
+    evaluated_submissions = Submission.query.filter(Submission.assignment_id.in_(assignment_ids), Submission.evaluated_at != None).count()
     
     # Get evaluation method breakdown
-    ai_evaluations = db.session.query(Submission).join(Assignment).filter(
+    ai_evaluations = Submission.query.join(Assignment).filter(
         Assignment.teacher_id == teacher_id,
         Submission.evaluation_method == 'gemini'
     ).count()
     
-    manual_evaluations = db.session.query(Submission).join(Assignment).filter(
+    manual_evaluations = Submission.query.join(Assignment).filter(
         Assignment.teacher_id == teacher_id,
         Submission.evaluation_method == 'expected'
     ).count()

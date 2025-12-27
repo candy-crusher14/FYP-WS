@@ -1303,10 +1303,8 @@
                                                     {% endif %}
                                                 </td>
                                                 <td>
-                                                    {% if submission.evaluated_at %}
-                                                        <a href="{{ url_for('student_report_pdf') }}?submission_id={{ submission.id }}" class="btn btn-sm btn-green" target="_blank">View Report</a>
-                                                    {% elif submission.submitted_at %}
-                                                        <a href="{{ url_for('view_submission_details', submission_id=submission.id) }}" class="btn btn-sm">View Details</a>
+                                                    {% if submission.submitted_at %}
+                                                        <a href="{{ url_for('student_submission_history', assignment_id=submission.assignment.id) }}" class="btn btn-sm btn-info">View History</a>
                                                     {% else %}
                                                         <a href="{{ url_for('submit_assignment', assignment_id=submission.assignment.id) }}" class="btn btn-sm btn-primary">Start</a>
                                                     {% endif %}

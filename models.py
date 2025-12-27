@@ -82,7 +82,7 @@ class Student(db.Model):
     profile_image = db.Column(db.String(200), nullable=True)
     is_approved = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    submissions = db.relationship('Submission', backref='student', lazy='dynamic')
+    submissions = db.relationship('Submission', backref='student', lazy='dynamic', cascade="all, delete-orphan")
     enrollments = db.relationship('Enrollment', backref='student', lazy='dynamic', cascade="all, delete-orphan")
     documents = db.relationship('StudentDocument', backref='student', lazy='dynamic', cascade="all, delete-orphan")
 
@@ -146,7 +146,7 @@ class ClusteredSubmission(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     cluster_id = db.Column(db.Integer, db.ForeignKey('clusters.id'), nullable=False)
     submission_id = db.Column(db.Integer, db.ForeignKey('submissions.id'), nullable=False, unique=True)
-    submission = db.relationship('Submission', backref=db.backref('cluster_membership', uselist=False))
+    submission = db.relationship('Submission', backref=db.backref('cluster_membership', uselist=False, cascade="all, delete-orphan"))
 
 class Submission(db.Model):
     __tablename__ = 'submissions'

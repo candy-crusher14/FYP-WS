@@ -1,0 +1,46 @@
+{% extends 'layout.html' %}
+
+{% block title %}Submission History - {{ assignment.title }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header">
+                    <h2>{{ assignment.title }}</h2>
+                    <p class="text-muted mb-0">Submission History</p>
+                </div>
+                <div class="card-body">
+                    <h5 class="card-title">Assignment Instructions</h5>
+                    <p class="card-text">{{ assignment.instructions }}</p>
+                    <hr>
+                    <h5 class="card-title">Your Submission</h5>
+                    <p class="card-text">{{ submission.answer_text }}</p>
+                    <p class="text-muted small">Submitted on: {{ submission.submitted_at.strftime('%Y-%m-%d %H:%M') }} UTC</p>
+
+                    {% if submission.evaluated_at %}
+                        <hr>
+                        <h5 class="card-title">Grade and Feedback</h5>
+                        <div class="alert alert-success">
+                            <strong>Score:</strong> {{ submission.score }} / {{ assignment.max_score }}
+                        </div>
+                        {% if submission.gemini_comment %}
+                            <p><strong>Feedback:</strong></p>
+                            <p>{{ submission.gemini_comment }}</p>
+                        {% endif %}
+                    {% else %}
+                        <hr>
+                        <div class="alert alert-info">
+                            This submission has not been graded yet.
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="card-footer text-center">
+                    <a href="{{ url_for('student_dashboard') }}" class="btn btn-primary">Back to Dashboard</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

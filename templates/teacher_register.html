@@ -168,36 +168,50 @@
             <p>Create your teacher account</p>
 
             <form method="POST" action="{{ url_for('teacher_register') }}">
-                <div class="form-group">
-                    <label for="username">Username</label>
-                    <input type="text" id="username" name="username" class="form-control" placeholder="Choose a username" required>
+                {{ form.hidden_tag() }}
+                <div class="mb-3">
+                    {{ form.username.label(class="form-label") }}
+                    {{ form.username(class="form-control") }}
+                    {% for error in form.username.errors %}
+                        <div class="text-danger small">{{ error }}</div>
+                    {% endfor %}
                 </div>
-                <div class="form-group">
-                    <label for="password">Password</label>
-                    <input type="password" id="password" name="password" class="form-control" placeholder="••••••••" required>
+                <div class="mb-3">
+                    {{ form.email.label(class="form-label") }}
+                    {{ form.email(class="form-control") }}
+                    {% for error in form.email.errors %}
+                        <div class="text-danger small">{{ error }}</div>
+                    {% endfor %}
                 </div>
-                <div class="form-group">
-                    <label for="confirm_password">Confirm Password</label>
-                    <input type="password" id="confirm_password" name="confirm_password" class="form-control" placeholder="••••••••" required>
+                <div class="mb-3">
+                    {{ form.password.label(class="form-label") }}
+                    {{ form.password(class="form-control") }}
+                    {% for error in form.password.errors %}
+                        <div class="text-danger small">{{ error }}</div>
+                    {% endfor %}
                 </div>
-                <div class="form-group">
-                    <label for="full_name">Full Name</label>
-                    <input type="text" id="full_name" name="full_name" class="form-control" placeholder="Your full name" required>
+                <div class="mb-3">
+                    {{ form.confirm_password.label(class="form-label") }}
+                    {{ form.confirm_password(class="form-control") }}
+                    {% for error in form.confirm_password.errors %}
+                        <div class="text-danger small">{{ error }}</div>
+                    {% endfor %}
                 </div>
-                <div class="form-group">
-                    <label for="email">Email</label>
-                    <input type="email" id="email" name="email" class="form-control" placeholder="your.email@example.com" required>
+                <div class="mb-3">
+                    {{ form.full_name.label(class="form-label") }}
+                    {{ form.full_name(class="form-control") }}
+                    {% for error in form.full_name.errors %}
+                        <div class="text-danger small">{{ error }}</div>
+                    {% endfor %}
                 </div>
-                <div class="form-group">
-                    <label for="university">University</label>
-                                        <select id="university" name="university_id" class="form-control" required>
-                        <option disabled selected value="">-- Select University --</option>
-                        {% for uni in universities %}
-                        <option value="{{ uni.id }}">{{ uni.name }}</option>
-                        {% endfor %}
-                    </select>
+                <div class="mb-3">
+                    {{ form.university_id.label(class="form-label") }}
+                    {{ form.university_id(class="form-select") }}
+                    {% for error in form.university_id.errors %}
+                        <div class="text-danger small">{{ error }}</div>
+                    {% endfor %}
                 </div>
-                <div class="form-group">
+                <div class="mb-3">
                     <label for="departments">Departments (select one or more)</label>
                     <select id="departments" name="departments" class="form-control" multiple required>
                         {% for dept in departments %}
@@ -205,6 +219,7 @@
                         {% endfor %}
                     </select>
                 </div>
+                {{ form.submit(class="btn btn-primary w-100") }}
                 <button type="submit" class="submit-btn">Create Account</button>
             </form>
 

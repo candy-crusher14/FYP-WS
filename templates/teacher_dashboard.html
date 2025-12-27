@@ -1414,23 +1414,28 @@
 </div>
 
 <!-- AI Cluster Modal -->
-<div class="modal fade" id="aiClusterModal" tabindex="-1" aria-labelledby="aiClusterModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-scrollable">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="aiClusterModalLabel">AI Submission Clusters</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body" id="aiClusterModalBody">
-                <!-- Clusters will be loaded here dynamically -->
-            </div>
-            <div class="modal-footer">
-                <div class="text-muted fst-italic small me-auto">
-                    AI-generated suggestions. Final grading authority remains with the instructor.
-                </div>
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-            </div>
+<div class="tab-pane fade" id="evaluation-hub" role="tabpanel" aria-labelledby="evaluation-hub-tab">
+    {% if current_filter_assignment_id %}
+        <div class="d-flex justify-content-end mb-3">
+            {% set assignment = all_assignments_for_filter|selectattr('id', 'equalto', current_filter_assignment_id)|first %}
+            {% if assignment and assignment.clusters|length > 0 %}
+                <form action="{{ url_for('recluster_assignment', assignment_id=current_filter_assignment_id) }}" method="POST" class="me-2">
+                    <button type="submit" class="btn btn-secondary"><i class="fas fa-sync-alt me-1"></i> Re-generate AI Clusters</button>
+                </form>
+            {% else %}
+                <form action="{{ url_for('cluster_assignment', assignment_id=current_filter_assignment_id) }}" method="POST" class="me-2">
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-brain me-1"></i> Generate AI Clusters</button>
+                </form>
+            {% endif %}
+    {% endif %}
+    <div class="modal-body" id="aiClusterModalBody">
+        <!-- Clusters will be loaded here dynamically -->
+    </div>
+    <div class="modal-footer">
+        <div class="text-muted fst-italic small me-auto">
+            AI-generated suggestions. Final grading authority remains with the instructor.
         </div>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
     </div>
 </div>
 
